@@ -11,6 +11,7 @@
 # VERSION HISTORY
 # 1.0 2014.05.05 Initial Version.
 # 1.1 2014.05.08 Finished handling for situations where services fail to start.
+# 1.2 2014.10.01 Added a section to start services on a foreign computer
 #
 # TO ADD:
 # 
@@ -34,6 +35,7 @@ $failureArray = @()
 $restartedServices = $false
 $failedServices = $false
 $successMessage = $false
+$foreignComputer = @("DIPRD67APPRAS01")
 
 Get-Service | Where-Object {$_.Name -match "ImageNow Se*" -and $_.Status -eq "Stopped"} | ForEach-Object {
     
@@ -144,6 +146,34 @@ Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Status -eq "Stopp
             }
         }
 
+    }
+}
+
+foreach ($computer in $foreignComputer)
+{
+    "$computer"
+
+    Get-Service -ComputerName $computer | Where-Object {$_.Name -match 'Image*' -and $_.Status -match 'Stopped*'} | ForEach-Object {
+
+        $foreignService = $_.Name
+    
+        Set-Service -ComputerName $computer $_.Name -Status Running
+    
+        if ($?)
+        {
+            $startedService = $foreignService
+            "Started $startedService at $(Get-Date)" | Out-File -Append -FilePath $logPath
+            $serviceArray += "$startedService`n"
+            $restartedServices = $true
+        }
+        else
+        {
+            $failedStart = $foreignService
+            "Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
+            $failureArray += "$failedStart"
+            $restartedServices = $true
+            $failedServices = $true
+        }
     }
 }
 
