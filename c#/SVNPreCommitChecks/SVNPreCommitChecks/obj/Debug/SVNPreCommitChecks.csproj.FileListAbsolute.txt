@@ -1,0 +1,6 @@
+c:\users\gjenczyk\documents\visual studio 2013\Projects\SVNPreCommitChecks\SVNPreCommitChecks\bin\Debug\SVNPreCommitChecks.exe.config
+c:\users\gjenczyk\documents\visual studio 2013\Projects\SVNPreCommitChecks\SVNPreCommitChecks\bin\Debug\SVNPreCommitChecks.exe
+c:\users\gjenczyk\documents\visual studio 2013\Projects\SVNPreCommitChecks\SVNPreCommitChecks\bin\Debug\SVNPreCommitChecks.pdb
+c:\users\gjenczyk\documents\visual studio 2013\Projects\SVNPreCommitChecks\SVNPreCommitChecks\obj\Debug\SVNPreCommitChecks.exe
+c:\users\gjenczyk\documents\visual studio 2013\Projects\SVNPreCommitChecks\SVNPreCommitChecks\obj\Debug\SVNPreCommitChecks.pdb
+C:\Users\GJenczyk\Documents\Visual Studio 2013\Projects\SVNPreCommitChecks\SVNPreCommitChecks\obj\Debug\SVNPreCommitChecks.csprojResolveAssemblyReference.cache
