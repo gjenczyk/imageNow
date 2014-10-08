@@ -8,61 +8,112 @@ namespace TortoiseSVNCommitTests
     {
         static void Main(string[] args)
         {
-            string[] filesToCheck = File.ReadAllLines(args[0]);
+            string[] allFiles = Directory.GetFiles(System.Environment.CurrentDirectory);
+            string logName = "\\TortoiseSVNCommitTests_Results.txt";
+            int errorCount = 0;
             bool errorFlag = false;
+            string delimiterString = "*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*_*";
 
-            foreach (string line in filesToCheck)
+            StreamWriter logFile = new StreamWriter(System.Environment.CurrentDirectory + logName);
+            Regex fileExtensionPattern = new Regex(@"^.*\.(js|jsh|ps1)$", RegexOptions.IgnoreCase);
+
+            foreach (string file in allFiles)
             {
-
-                if (CheckForDebugLogsMismatch(line))
+                if (fileExtensionPattern.IsMatch(file) && File.Exists(file))
                 {
-                   errorFlag = true;
-                }
 
+                    logFile.WriteLine(delimiterString);
+                    logFile.WriteLine("Checking {0} for errors", file);
+                    string[] fileToCheck = File.ReadAllLines(file);
+                    int scriptLineCount = 0;
+
+                    foreach (string line in fileToCheck)
+                    {
+                        if (!line.Contains(";"))
+                        {
+                            //Console.WriteLine("nope");
+                        }
+
+                        scriptLineCount++;
+                        if (CheckForDebugLogsMismatch(line, logFile, scriptLineCount))
+                        {
+                            errorFlag = true;
+                            errorCount++;
+                        }
+                    }
+                }
             }
 
-            if(errorFlag)
+            if (errorFlag)
             {
-                Console.WriteLine("There is an error that must be resolved before this file can be committed.");
-                return;
+                logFile.WriteLine("There were {0} errors detected by TortoiseSVNCommitTest", errorCount);
             }
             else
             {
-                Console.WriteLine("No errors found.  File is ready to be committed.");
+                logFile.WriteLine("No errors found.  Files are ready to be committed.");
             }
+            logFile.Close();
+            //Console.ReadLine();
         }
 
-
-        private static bool CheckForDebugLogsMismatch(string scriptLine)
+        private static bool CheckForDebugLogsMismatch(string scriptLine, StreamWriter log, int lineNum)
         {
 
+            //bit of manipulation to make the line easier to parse
             scriptLine = scriptLine.ToUpper();
+            scriptLine = scriptLine.Replace("'","\"");
 
-            if (scriptLine.Contains("DEBUG.LOG"))
+            if (scriptLine.Contains("DEBUG.LOG("))
             {
+                Regex debugRegex = new Regex("DEBUG.LOG(.*);");
+                var dR = debugRegex.Match(scriptLine);
+                string dRr = dR.Groups[1].ToString();
+                //Console.WriteLine(dRr);
+
+                if (dRr == null)
+                {
+                    Console.WriteLine("Here's a problem");
+                    Console.ReadLine();
+                }
+
                 // string manipulation to seperate the debug string and arguments
-                int openingBrace = scriptLine.IndexOf('(');
-                int closingBrace = scriptLine.LastIndexOf(')');
-                int betweenBrace = closingBrace - openingBrace;
+                int openingBrace = dRr.IndexOf('(');
+                int closingBrace = dRr.LastIndexOf(')');
+                if (closingBrace < 0)
+                {
+                    log.WriteLine("CB - NON-STANDARD DEBUG SYNTAX DETECTED @ line {0} \r\n {1}\r\n", lineNum, scriptLine);
+                    return false;
+                }
+                int betweenBrace = closingBrace - openingBrace + 1;
 
-                scriptLine = scriptLine.Substring(openingBrace, betweenBrace);
-                //Console.WriteLine(scriptLine + " * * ");
+                dRr = dRr.Substring(openingBrace, betweenBrace);
+                //log.WriteLine(dRr + " * * ");
 
-                int severityComma = scriptLine.IndexOf(',');
-                scriptLine = scriptLine.Substring(severityComma);
+                int severityComma = dRr.IndexOf(',');
+                if (severityComma < 0)
+                {
+                    log.WriteLine("SC - NON-STANDARD DEBUG SYNTAX DETECTED @ line {0} \r\n {1}\r\n", lineNum, scriptLine);
+                    return false;
+                }
+                dRr = dRr.Substring(severityComma);
 
-                int openingQuote = scriptLine.IndexOf('"');
-                int closingQuote = scriptLine.LastIndexOf('"');
+                int openingQuote = dRr.IndexOf('"');
+                int closingQuote = dRr.LastIndexOf('"');
+                if (closingQuote < 0)
+                {
+                    log.WriteLine("CQ - NON-STANDARD DEBUG SYNTAX DETECTED @ {0} \r\n {1}\r\n", lineNum, scriptLine);
+                    return false;
+                }
                 int lengthQuote = closingQuote - openingQuote;
 
-                string debugString = scriptLine.Substring(openingQuote + 1, lengthQuote - 1);
+                string debugString = dRr.Substring(openingQuote + 1, lengthQuote - 1);
 
-                string argsString = scriptLine.Substring(closingQuote + 1);
+                string argsString = dRr.Substring(closingQuote + 1);
 
                 //Console.WriteLine(debugString);
                 //Console.WriteLine(argsString);
 
-                int sCount = debugString.Split(new string[] { "%S" }, StringSplitOptions.None).Length - 1;
+                int sCount = debugString.Split(new string[] { "%" }, StringSplitOptions.None).Length - 1;
                 
 
                 if (sCount > 0)
@@ -73,8 +124,8 @@ namespace TortoiseSVNCommitTests
                     
                     if (sCount != aCount)
                     {
-                        Console.WriteLine("SYNTAX ERROR - ARGUMENTS NOT SUPPLIED FOR ALL SPECIFIERS {0} {1}", sCount, aCount);
-                        Console.WriteLine("Debug String: {0}\nArg String: {1}", debugString, argsString);
+                        log.WriteLine("SYNTAX ERROR - ARGUMENTS NOT SUPPLIED FOR ALL SPECIFIERS @ line {0} - {1} {2}", lineNum, sCount, aCount);
+                        log.WriteLine("Debug String: {0}\r\nArg String: {1}\r\n", debugString, argsString);
                         return true;
                     }
 
