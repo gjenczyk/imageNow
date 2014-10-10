@@ -8,7 +8,8 @@ namespace TortoiseSVNCommitTests
     {
         static void Main(string[] args)
         {
-            string[] allFiles = Directory.GetFiles(System.Environment.CurrentDirectory);
+            string startDir = System.Environment.CurrentDirectory;
+            string[] allFiles = Directory.GetFiles(startDir, "*", SearchOption.AllDirectories);
             string logName = "\\TortoiseSVNCommitTests_Results.txt";
             int errorCount = 0;
             bool errorFlag = false;
