@@ -1,4 +1,4 @@
-# #############################################################################
+<# #############################################################################
 # NAME: ghost.ps1
 # 
 # AUTHOR:  Gregg Jenczyk, UMass (UITS)
@@ -10,10 +10,11 @@
 # VERSION HISTORY
 # 1.0 2013.11.29 Initial Version.
 # 1.1 2013.12.17 Added cleanup for orphaned gswin processes
+# 2.0 2013.10.24 Improved error handling
 #
 # TO ADD:
 #?
-# #############################################################################
+# #############################################################################>
 # CONFIG #
 
 $pdf = $args[0] 
@@ -24,9 +25,7 @@ $pdfName = $args[2]
 #"pdfName is $pdfName"| Out-File D:\INMAC\ne.txt -Append 
 $inmacVersion = $args[3]
 #"inmac version is $inmacVersion" | Out-File D:\INMAC\ne.txt -Append
-$tool = 'D:\Program Files\gs\gs9.14\bin\gswin64c.exe'
-$timeout = new-timespan -Minutes 5
-$sw = [diagnostics.stopwatch]::StartNew()
+
 $pdfPath = $pdf+$pdfName  
 #"pdfPath is $pdfPath"| Out-File D:\INMAC\ne.txt -Append 
 # MAIN #
@@ -41,24 +40,49 @@ $pdfPath = $pdf+$pdfName
         $workingTif = $outTif -replace '.tif$',''
         $param = "-sOutputFile=$workingTif-%06d.tif"
 
-        #$convert = Start-Process $tool -ArgumentList "-q -dNOPAUSE -sDEVICE=tiffg4 $param -r600 $pdfPath -c quit" -passthru
-        $convert = Start-Process $tool -ArgumentList "-q -dNumRenderingThreads=4 -dBandBufferSpace=500000000 -sBandListStorage=memory -dBufferSpace=1000000000 -dNOPAUSE -sDEVICE=tiffg4 $param -r600 -c 30000000 setvmthreshold -f $pdfPath -c quit" -passthru
-        
-        $error[0] | Out-File D:\INMAC\${inmacVersion}_powerghost.log -Append
-        
-        do
+        #Convert the pdf
+        $pinfo = New-Object System.Diagnostics.ProcessStartInfo
+        $pinfo.FileName = "D:\Program Files\gs\gs9.14\bin\gswin64c.exe"
+        $pinfo.RedirectStandardError = $true
+        $pinfo.RedirectStandardOutput = $true
+        $pinfo.UseShellExecute = $false
+        $pinfo.Arguments = "-q -dNumRenderingThreads=4 -dBandBufferSpace=500000000 -sBandListStorage=memory -dBufferSpace=1000000000 -dNOPAUSE -sDEVICE=tiffg4 $param -r600 -c 30000000 setvmthreshold -f $pdfPath -c quit"
+        $p = New-Object System.Diagnostics.Process
+        $p.StartInfo = $pinfo
+        $p.Start() #| Out-Null
+        $timer = $p.WaitForExit(300000);
+
+        if (!$timer)
         {
-            #this makes sure the vbscript doesn't do any additional processing until the conversion is finished.
-            start-sleep -m 250
+            "$userName - $pdfName timed out @ $(get-date)"| Out-File  D:\INMAC\${inmacVersion}_powerghost.log -Append
+            [Environment]::Exit(1)
+        }
 
-            if ($sw.elapsed -gt $timeout){
-                #kill any GhostScript instances that may be left over after conversion times out
-                gwmi -query "select * from win32_process where ProcessId='$convert.Id'" | %{if($_.GetOwner().User -eq "$userName"){$_.terminate()}}                
-                $error[0] | Out-File D:\INMAC\${inmacVersion}_ghost.log -Append 
-                "$userName - $pdfName timed out @ $(get-date)"| Out-File  D:\INMAC\${inmacVersion}_powerghost.log -Append
-                [Environment]::Exit(1)
+        $stdout = $p.StandardOutput.ReadToEnd()
+        $stderr = $p.StandardError.ReadToEnd()
+        #Write-Host "stdout: $stdout"
+        #Write-Host "stderr: $stderr"
+        #Write-Host "exit code: " + $convert.ExitCode
+
+        if ($stderr)
+        {
+            if ($stderr.Contains("GPL Ghostscript 9.14: Unrecoverable error, exit code 1"))
+            {
+                if($stderr.Contains("Error updating TIFF header"))
+                {
+                    "------------------------------------------------------------------" | Out-File D:\INMAC\${inmacVersion}_powerghost.log -Append
+                    "$stderr" | Out-File D:\INMAC\${inmacVersion}_powerghost.log -Append
+                    [Environment]::Exit(2)
+                }
+                else 
+                {
+                    "------------------------------------------------------------------" | Out-File D:\INMAC\${inmacVersion}_powerghost.log -Append
+                    "$stderr" | Out-File D:\INMAC\${inmacVersion}_powerghost.log -Append
+                    [Environment]::Exit(3)
+                }   
             }
-        } until ((get-process -id $convert.Id -erroraction "silentlycontinue") -eq $null )        
 
-        
+        }   
+
+        $error[0] | Out-File D:\INMAC\${inmacVersion}_powerghost.log -Append      
  }
