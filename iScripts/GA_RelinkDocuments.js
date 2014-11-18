@@ -231,20 +231,9 @@ function main ()
               }
               //printf("[%s] [%s] [%s]\n", relinkID, sharedProp, sharedVal);
 
-              debug.log("DEBUG","[%s] [%s] [%s] [%s]\n", relinkID, sharedProp, sharedVal, docToUpdate.field4.toUpperCase());
-              if ((docToUpdate.field4.toUpperCase() == "SHARED"))
-              {
-                debug.log("DEBUG","\n\n\nyup\n\n\n");
-              }
-              else
-              {
-                debug.log("DEBUG","\n\n\nnope\n\n\n");
-              }
-
               if ((!sharedProp || !sharedVal) && docToUpdate.field4.toUpperCase() != "SHARED")
               {
                 
-                debug.log("INFO","\n\n\In non shared\n\n\n");
                 var targetDrawer = docToUpdate.drawer;
                 var targetField1 = docToUpdate.field1;
                 var targetField2 = docToUpdate.field2;
@@ -294,7 +283,7 @@ function main ()
                 
                 if(!docToUpdate.setCustomProperties(propsToUpdate))
                 {
-                  printf("%s\n", getErrMsg());
+                  debug.log("ERROR","Couldn't update CPs for [%s]. Error: %s\n", docToUpdate.id, getErrMsg());
                   ERROR_FLAG = true;
                 }
                 else
@@ -303,12 +292,12 @@ function main ()
                 }
                 if (!reindexDocument(relinkID, keys, "APPEND"))
                 {
-                  printf("%s\n", getErrMsg());
+                  debug.log("ERROR","Couldn't update keys for [%s]. Error: %s\n", docToUpdate.id, getErrMsg());
                   ERROR_FLAG = true;
                 }
                 else
                 {
-                  printf("Index values been updated\n");
+                  debug.log("INFO","Index values been updated for [%s]\n", relinkID);
                 }
 
                 if (!writeToWFHistory(docToUpdate, triggerCreator))
@@ -321,7 +310,6 @@ function main ()
               //debug.log("INFO","\n\n\n\n%s\n\n\n\n\n\n", docToUpdate.field4.toUpperCase());
               else if ((sharedProp && sharedVal) ||  (docToUpdate.field4.toUpperCase() == "SHARED"))
               {
-                debug.log("INFO","Processing \n");
 
                 var targetDrawer = docToUpdate.drawer;
                 var targetField1 = docToUpdate.field1;
@@ -332,7 +320,7 @@ function main ()
                 var targetType = docToUpdate.docTypeName;
 
                 var keys = new INKeys(targetDrawer, driverField1, driverField2, driverField3, targetField4, targetField5, targetType, "WithCustProps");
-                printf("%s\n", keys.toString());
+                //printf("%s\n", keys.toString());
 
                 var targetCPName;
                 var targetCPVal;
@@ -379,7 +367,7 @@ function main ()
 
                 if(!docToUpdate.setCustomProperties(propsToUpdate))
                 {
-                  debug.log("Couldn't set cus%s\n", getErrMsg());
+                  debug.log("ERROR","Couldn't update CPs for [%s]. Error: %s\n", docToUpdate.id, getErrMsg());
                   ERROR_FLAG = true;
                 }
                 else
@@ -388,7 +376,7 @@ function main ()
                 }
                 if (!reindexDocument(relinkID, keys, "APPEND"))
                 {
-                  printf("%s\n", getErrMsg());
+                  debug.log("ERROR","Couldn't update keys for [%s]. Error: %s\n", docToUpdate.id, getErrMsg());
                   ERROR_FLAG = true;
                 }
                 else
