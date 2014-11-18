@@ -16,16 +16,19 @@
 
 SELECT val1.doc_id, 
 val2.prop_name,
-val2.string_val 
+val2.string_val
 FROM 
-(SELECT INUSER.IN_DOC.DOC_ID, 
-INUSER.IN_DRAWER.DRAWER_NAME
+(SELECT INUSER.IN_DOC.DOC_ID,
+  INUSER.IN_DRAWER.DRAWER_NAME
 FROM INUSER.IN_DOC
 INNER JOIN INUSER.IN_DRAWER
 ON INUSER.IN_DRAWER.DRAWER_ID = INUSER.IN_DOC.DRAWER_ID
-WHERE INUSER.IN_DRAWER.DRAWER_NAME LIKE 'UMBGA%' 
+INNER JOIN INUSER.IN_INSTANCE
+ON INUSER.IN_DOC.INSTANCE_ID = INUSER.IN_INSTANCE.INSTANCE_ID
+WHERE INUSER.IN_DOC.DOC_ID  <> '321YYC6_062WSRGVE00001P'
+AND INUSER.IN_DRAWER.DRAWER_NAME LIKE 'UMBGA%'
 AND INUSER.IN_DOC.FOLDER = '01559762'
-AND INUSER.IN_DOC.DOC_ID <> '321YYC6_062WSRGVE00001P') val1
+AND INUSER.IN_INSTANCE.DELETION_STATUS <> 1) val1
 full outer JOIN 
 (SELECT INUSER.IN_DOC.DOC_ID,
 INUSER.IN_DRAWER.DRAWER_NAME,
@@ -70,25 +73,23 @@ on val1.doc_id = val2.doc_id;
 
 // ********************* Initialize global variables ********************
 var debug;
+var ERROR_FLAG = false; // presumption is that everything will succeed!
 var DOC_TYPE = "Relink Documents ";
 var ERR_QUEUE = " Relink Error"; 
+var COMPLETE_QUEUE = " Recycle Bin";
 var SHARED_Y_STRING = "301YT7N_000CFJ25Y0000NX";
 
 var WHITE_LIST = {
 
-    "BGA":["Document App Plan", "Source"],
-    "DGA":["Document App Plan", "Source"],
-    "LGA":["Document App Plan", "Source"]
+    "BGA":["Document App Plan", "Signature Reason", "Source"],
+    "DGA":["Document App Plan", "Signature Reason", "Source"],
+    "LGA":["Document App Plan", "Signature Reason", "Source"]
 
 };
 
 var SHARED_UPDATE_CPS = {"DOB", "SSN#, Legacy"};
 var SHARED_BLANK_CPS = {"Plan", "Plan Code"};
 
-//probable global variables
-//
-//var QUEUE_COMPLETE = Recycle Bin;
-//var QUEUE_ERROR = Relinking Error;
 
 /**
 * Main body of script.
@@ -102,8 +103,8 @@ function main ()
             debug = new iScriptDebug("GA_RelinkDocuments", LOG_TO_FILE, DEBUG_LEVEL);
             debug.log("WARNING", "GA_RelinkDocuments.js starting.\n");
 
-            var wfItem = INWfItem.get("321YYC6_062WSHGVE00002E");
-            //"321YYC6_062WSHGVE00002N");//currentWfItem.id);
+            var wfItem = INWfItem.get(currentWfItem.id);
+
 			      if (!wfItem.getInfo())
 			      {
 				      debug.log("ERROR","Could not get info for wf ID: [%s]. Error: [%s]\n", currentWfItem.id, gettErrMsg());
@@ -116,11 +117,13 @@ function main ()
             var relinkTrigger = DOC_TYPE + campus;
             var errorQueue = campus + ERR_QUEUE;
             var triggerCreator = wfItem.creationUserName;
+            var recycleQueue = "UM" + campus + COMPLETE_QUEUE;
 
 			      var wfDoc = new INDocument(wfItem.objectId);
 			      if (!wfDoc.getInfo())
             {
               debug.log("ERROR","Could not get info for doc ID: [%s]. Error: [%s]\n", wfDoc.name, gettErrMsg());
+              RouteItem(wfItem.id, errorQueue, "Could not get doc Info!");
               return false;
             }
 
@@ -128,8 +131,8 @@ function main ()
             if (wfDoc.docTypeName != relinkTrigger)
             {
               debug.log("WARNING","Document [%s][%s] is not type: [%s]. Routing to [%s]\n", wfDoc.id, wfDoc.docTypeName, relinkTrigger, errorQueue);
-              //RouteItem(wfItem.id, errorQueue, "Incorrect doc type for relinking");
-              //return false;
+              RouteItem(wfItem.id, errorQueue, "Incorrect doc type for relinking");
+              return false;
             }
 
             //get all relevant info from trigger doc
@@ -153,7 +156,7 @@ function main ()
               if (campusName == campus)
               {
                 currentWhiteList = eval("WHITE_LIST." + campusName);
-                printf("currentWhiteList = %s %s\n", currentWhiteList[0], currentWhiteList[1]);
+                debug.log("DEBUG","currentWhiteList = %s %s\n", currentWhiteList[0], currentWhiteList[1]);
                 break;
               }
             }
@@ -178,9 +181,12 @@ function main ()
                       "FROM INUSER.IN_DOC " +
                       "INNER JOIN INUSER.IN_DRAWER " +
                       "ON INUSER.IN_DRAWER.DRAWER_ID = INUSER.IN_DOC.DRAWER_ID " +
+                      "INNER JOIN INUSER.IN_INSTANCE " + 
+                      "ON INUSER.IN_DOC.INSTANCE_ID = INUSER.IN_INSTANCE.INSTANCE_ID " +
                       "WHERE INUSER.IN_DRAWER.DRAWER_NAME LIKE '" + driverDrawer + "%' " +
                       "AND INUSER.IN_DOC.DOC_ID <> '"+ driverId +"'" + 
-                      "AND INUSER.IN_DOC.FOLDER = '" + driverField1 + "') val1 " +
+                      "AND INUSER.IN_DOC.FOLDER = '" + driverField1 + "'" +
+                      "AND INUSER.IN_INSTANCE.DELETION_STATUS <> 1) val1 " +
                       "full outer JOIN " +
                       "(SELECT INUSER.IN_DOC.DOC_ID, " +
                       "INUSER.IN_DRAWER.DRAWER_NAME, " +
@@ -206,9 +212,9 @@ function main ()
             if(!cur || cur == null)
             {
               debug.log("WARNING","no results returned for query.\n");
+              RouteItem(wfItem.id, errorQueue, "No matching docs found!");
               return false;
             } 
-
 
             while(cur.next())
             {     
@@ -220,12 +226,25 @@ function main ()
               if (!docToUpdate.getInfo())
               {
                 debug.log("ERROR","Could not get info for doc ID: [%s]. Error: [%s]\n", docToUpdate.name, gettErrMsg());
-                return false;
+                ERROR_FLAG = true;
+                continue;
               }
               //printf("[%s] [%s] [%s]\n", relinkID, sharedProp, sharedVal);
-              if (!sharedProp || !sharedVal)
+
+              debug.log("DEBUG","[%s] [%s] [%s] [%s]\n", relinkID, sharedProp, sharedVal, docToUpdate.field4.toUpperCase());
+              if ((docToUpdate.field4.toUpperCase() == "SHARED"))
+              {
+                debug.log("DEBUG","\n\n\nyup\n\n\n");
+              }
+              else
+              {
+                debug.log("DEBUG","\n\n\nnope\n\n\n");
+              }
+
+              if ((!sharedProp || !sharedVal) && docToUpdate.field4.toUpperCase() != "SHARED")
               {
                 
+                debug.log("INFO","\n\n\In non shared\n\n\n");
                 var targetDrawer = docToUpdate.drawer;
                 var targetField1 = docToUpdate.field1;
                 var targetField2 = docToUpdate.field2;
@@ -235,7 +254,7 @@ function main ()
                 var targetType = docToUpdate.docTypeName;
 
                 var keys = new INKeys(targetDrawer, driverField1, driverField2, driverField3, driverField4, targetField5, targetType, "WithCustProps");
-                printf("%s\n", keys.toString());
+                //printf("%s\n", keys.toString());
 
                 var targetCPName;
                 var targetCPVal;
@@ -255,11 +274,11 @@ function main ()
 
                   //debug.log("INFO","Target CP Name & Value [%s] [%s]\n", targetCustProps[tp].name, targetCustProps[tp].getValue());
                   //printf(""Target CP Name & Value [%s] [%s]\n", targetCustProps[tp].name, targetCustProps[tp].getValue());
-
+                  
 
                   for (var a in driverPropArrray)
                   {
-                    if (driverPropArrray[a].name == targetCPName)
+                    if (driverPropArrray[a].name == targetCPName && !include(currentWhiteList, driverPropArrray[a].name))
                     {
                       //printf("#:%s dpan:%s tcpn:%s dpav:%s tcpv:%s\n", a, driverPropArrray[a].name, targetCPName, driverPropArrray[a].value, targetCPVal);
 
@@ -276,24 +295,31 @@ function main ()
                 if(!docToUpdate.setCustomProperties(propsToUpdate))
                 {
                   printf("%s\n", getErrMsg());
+                  ERROR_FLAG = true;
                 }
                 else
                 {
-                  printf("Custom Property values been updated\n");
+                  debug.log("INFO","Custom Property values been updated for [%s]\n", relinkID);
                 }
                 if (!reindexDocument(relinkID, keys, "APPEND"))
                 {
                   printf("%s\n", getErrMsg());
+                  ERROR_FLAG = true;
                 }
                 else
                 {
                   printf("Index values been updated\n");
                 }
 
-                //writeToWFHistory(docToUpdate, triggerCreator);
+                if (!writeToWFHistory(docToUpdate, triggerCreator))
+                {
+                  ERROR_FLAG = true;
+                }
 
               } // end if (!sharedProp || !sharedVal)
-              else if (sharedProp && sharedVal)
+
+              //debug.log("INFO","\n\n\n\n%s\n\n\n\n\n\n", docToUpdate.field4.toUpperCase());
+              else if ((sharedProp && sharedVal) ||  (docToUpdate.field4.toUpperCase() == "SHARED"))
               {
                 debug.log("INFO","Processing \n");
 
@@ -301,7 +327,7 @@ function main ()
                 var targetField1 = docToUpdate.field1;
                 var targetField2 = docToUpdate.field2;
                 var targetField3 = docToUpdate.field3;
-                var targetField4 = "SHARED";
+                var targetField4 = "Shared";
                 var targetField5 = docToUpdate.field5;
                 var targetType = docToUpdate.docTypeName;
 
@@ -328,7 +354,7 @@ function main ()
 
                   for (var a in driverPropArrray)
                   {
-                    if ((driverPropArrray[a].name == targetCPName) && include(SHARED_UPDATE_CPS, targetCPName))
+                    if ((driverPropArrray[a].name == targetCPName) && include(SHARED_UPDATE_CPS, targetCPName) && !include(currentWhiteList, driverPropArrray[a].name))
                     {
                       //printf("#:%s dpan:%s tcpn:%s \n", a, driverPropArrray[a].name, targetCPName);
                       //printf("#:%s dpav:%s tcpv:%s\n", a, driverPropArrray[a].value, targetCPVal);
@@ -338,7 +364,7 @@ function main ()
                       propsToUpdate.push(setProp);
                       break;
                     }  // end if (driverPropArrray[a].name == targetCPName)
-                    if ((driverPropArrray[a].name == targetCPName) && include(SHARED_BLANK_CPS, targetCPName))
+                    if ((driverPropArrray[a].name == targetCPName) && include(SHARED_BLANK_CPS, targetCPName) && !include(currentWhiteList, driverPropArrray[a].name))
                     {
                       //printf("#:%s dpan:%s tcpn:%s \n", a, driverPropArrray[a].name, targetCPName);
                       //printf("#:%s dpav:%s tcpv:%s\n", a, driverPropArrray[a].value, targetCPVal);
@@ -354,35 +380,49 @@ function main ()
                 if(!docToUpdate.setCustomProperties(propsToUpdate))
                 {
                   debug.log("Couldn't set cus%s\n", getErrMsg());
+                  ERROR_FLAG = true;
                 }
                 else
                 {
-                  printf("Custom Property values been updated\n");
+                  debug.log("INFO","SHARED Custom Property values been updated for [%s]\n", relinkID);
                 }
                 if (!reindexDocument(relinkID, keys, "APPEND"))
                 {
                   printf("%s\n", getErrMsg());
+                  ERROR_FLAG = true;
                 }
                 else
                 {
-                  printf("Index values been updated\n");
+                  debug.log("INFO","SHARED Index values been updated for [%s]\n", relinkID);
                 }   
 
-                //writeToWFHistory(docToUpdate, triggerCreator);
+                if (!writeToWFHistory(docToUpdate, triggerCreator))
+                {
+                  ERROR_FLAG = true;
+                }
+
 
               }// end if (sharedProp && sharedVal)
               else
               {
-                printf("Unable to determine if this document is shared.\n");
+                debug.log("ERROR","Unable to determine if [%s] is shared (VALS:[%s][%s]).\n", relinkID, sharedProp, sharedVal);
+                ERROR_FLAG = true;
                 continue;
               }
 
             } // end while(Cur.next())
 
-
-            //route driver to recycle bin
-              // if relinking fails, add note to driver and route to error queue?
-              // will we need an error flag?           
+            //clean up the driver now that we're done relinking (maybe?)
+            if (ERROR_FLAG) // if relinking fails, add note to driver and route to error queue?
+            {
+              debug.log("ERROR","The script encountered errors in relinking.  Routing [%s] to [&s]\n", wfItem.id, errorQueue);
+              RouteItem(wfItem.id, errorQueue, "Unable to relink some documents.  Please check logs.");
+            }
+            else
+            {
+              debug.log("INFO","Relinking complete - routing [%s] to [%s]\n", wfDoc.id, recycleQueue);
+              RouteItem(wfItem.id, recycleQueue, "Relinking successful");
+            }
 
         } // end of try
         
@@ -435,7 +475,7 @@ function writeToWFHistory (targetDoc, creator)
 
   if (!itemWFInfo || itemWFInfo == null)
   {
-    printf("Couldn't get WFInfo for %s.  Error: %s\n", targetDoc.id, getErrMsg());
+    debug.log("ERROR","Couldn't get WFInfo for %s.  Error: %s\n", targetDoc.id, getErrMsg());
     return false;
   } // end writeToWFHistory
 
@@ -443,19 +483,19 @@ function writeToWFHistory (targetDoc, creator)
 
   if (!itemToNote.getInfo())
   {
-    printf("Failed to get item. Error: %s.\n", getErrMsg());
+    debug.log("ERROR","Failed to get item. Error: %s.\n", getErrMsg());
     return false;
   }
 
-  if (itemToNote.state != 1)  //GJ - is this step necessary?
+  if (itemToNote.state == 2)  //GJ - is this step necessary?
   {
-    printf("Item [%s]is currently being processed in workflow.  Cannot relink.\n", targetDoc.id);
+    debug.log("ERROR","Item [%s]is currently being processed in workflow.  Cannot relink. [%s]\n", targetDoc.id, itemToNote.state);
     return false;
   }
 
   if (!itemToNote.setState(WfItemState.Idle, "This item was relinked via iScript by " + creator))
   {
-    printf("Could not set state: %s.\n", getErrMsg());
+    debug.log("ERROR","Could not set state: %s.\n", getErrMsg());
     return false;
   }
 
