@@ -280,30 +280,6 @@ function main ()
                     }  // end if (driverPropArrray[a].name == targetCPName)
                   } // end for (var a in driverPropArrray)
                 } // end for (tp = 0; tp<targetCustProps.length; tp++)
-                
-                if(!docToUpdate.setCustomProperties(propsToUpdate))
-                {
-                  debug.log("ERROR","Couldn't update CPs for [%s]. Error: %s\n", docToUpdate.id, getErrMsg());
-                  ERROR_FLAG = true;
-                }
-                else
-                {
-                  debug.log("INFO","Custom Property values been updated for [%s]\n", relinkID);
-                }
-                if (!reindexDocument(relinkID, keys, "APPEND"))
-                {
-                  debug.log("ERROR","Couldn't update keys for [%s]. Error: %s\n", docToUpdate.id, getErrMsg());
-                  ERROR_FLAG = true;
-                }
-                else
-                {
-                  debug.log("INFO","Index values been updated for [%s]\n", relinkID);
-                }
-
-                if (!writeToWFHistory(docToUpdate, triggerCreator))
-                {
-                  ERROR_FLAG = true;
-                }
 
               } // end if (!sharedProp || !sharedVal)
 
@@ -365,14 +341,24 @@ function main ()
                   } // end for (var a in driverPropArrray)
                 } // end for (tp = 0; tp<targetCustProps.length; tp++)
 
-                if(!docToUpdate.setCustomProperties(propsToUpdate))
+              }// end if (sharedProp && sharedVal)
+              // if we can't determine what type of document it is
+              else
+              {
+                debug.log("ERROR","Unable to determine if [%s] is shared (VALS:[%s][%s]).\n", relinkID, sharedProp, sharedVal);
+                ERROR_FLAG = true;
+                continue;
+              }
+
+              // set the index values / custom properties on the documents
+              if(!docToUpdate.setCustomProperties(propsToUpdate))
                 {
                   debug.log("ERROR","Couldn't update CPs for [%s]. Error: %s\n", docToUpdate.id, getErrMsg());
                   ERROR_FLAG = true;
                 }
                 else
                 {
-                  debug.log("INFO","SHARED Custom Property values been updated for [%s]\n", relinkID);
+                  debug.log("INFO","Custom Property values been updated for [%s]\n", relinkID);
                 }
                 if (!reindexDocument(relinkID, keys, "APPEND"))
                 {
@@ -381,22 +367,13 @@ function main ()
                 }
                 else
                 {
-                  debug.log("INFO","SHARED Index values been updated for [%s]\n", relinkID);
-                }   
+                  debug.log("INFO","Index values been updated for [%s]\n", relinkID);
+                }
 
                 if (!writeToWFHistory(docToUpdate, triggerCreator))
                 {
                   ERROR_FLAG = true;
                 }
-
-
-              }// end if (sharedProp && sharedVal)
-              else
-              {
-                debug.log("ERROR","Unable to determine if [%s] is shared (VALS:[%s][%s]).\n", relinkID, sharedProp, sharedVal);
-                ERROR_FLAG = true;
-                continue;
-              }
 
             } // end while(Cur.next())
 
