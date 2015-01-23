@@ -319,6 +319,7 @@ function processByCSV()
     return false;
   } // end if fp = null
 
+   //for each row in the csv
    while ( null != (line=Clib.fgets(fp)) )
    {     
       columns = line.replace(/\r?\n|\r/,'').split(",");
@@ -396,6 +397,22 @@ function processByCSV()
         debug.log("ERROR","Could not find the task reason [%s] in [%s]\n", tsk, csvTemplate.name);
         continue;
       }
+
+      //check to see if the workflow queue exists.
+
+      var queueExists = INWfAdmin.queueSearch(desQueue);
+
+      if (queueExists.length > 1)
+      {
+        debug.log("WARNING","Multiple results found for [%s]. Going to next row.\n", desQueue);
+        continue;
+      }
+      if (!queueExists[0] || queueExists[0] == null)
+      {
+        debug.log("WARNING","Could not find workflow queue with the name: [%s]\n", desQueue);
+        continue;
+      } 
+      // end of check for wf queue
 
       var wfFolder = folder.getWfInfo();
       if (!wfFolder || wfFolder == null)
