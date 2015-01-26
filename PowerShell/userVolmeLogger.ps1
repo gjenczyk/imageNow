@@ -1,4 +1,4 @@
-# #############################################################################
+<##############################################################################
 # NAME: GenericIntoolRunner.ps1
 # 
 # AUTHOR:  Gregg Jenczyk, UMass (UITS)
@@ -16,7 +16,7 @@
 # 
 # USEFUL SNIPPETS:
 # "$(Get-Date) " | Out-File -Append $runLog
-# #############################################################################
+##############################################################################>
 
 #-- INCLUDES --#
 . "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
@@ -30,13 +30,13 @@ $env = $env -replace "W.*",""
 $logDate = $(get-date -format 'yyyyMMdd')
 
 #- LOGGING -#
-$runLog = "${root}log\run_log-QueueContentResolution.log"
-$scriptLog = "${root}log\QueueContentResolution_${logDate}.log"
+$runLog = "${root}log\running_log-userVolumeLogger.log"
+$scriptLog = "${root}log\userVolumeLogger${logDate}.log"
 
 #-- MAIN --#
-"$(get-date) - Starting QueueContentResolution Script" | Out-File $runLog -Append
+"$(get-date) - Starting userVolumeLogger Script" | Out-File $runLog -Append
 
-D:\inserver6\bin64\intool3 --cmd run-iscript --file ${root}script\QueueContentResolution.js
+D:\inserver6\bin64\intool4 --cmd run-iscript --file ${root}script\userVolumeLogger.js
 
 <#
 Use this if you want to be notified when the script finishes running
@@ -45,4 +45,4 @@ sendmail -t "gjenczyk@umassp.edu" -s "[DI ${env} Notice] ScriptName.ps1 has fini
 #>
 
 $error[0] | Out-File $runLog -Append
-"$(get-date) - Finishing QueueContentResolution Script" | Out-File $runLog -Append
+"$(get-date) - Finishing userVolumeLogger Script" | Out-File $runLog -Append

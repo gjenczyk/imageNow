@@ -21,13 +21,13 @@
 # #############################################################################
 
 #-- INCLUDES --#
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\unZip.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\unZip.ps1"
 
 #-- CONFIG --#
 
 $root = "D:\"
-$shareRoot = "Y:\"
+$shareRoot = "\\boisnas215c1.umasscs.net\di_interfaces\"
 $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
 $myDate = (get-date -format 'yyyy-MM-dd')
@@ -36,22 +36,22 @@ $shortDate = (get-date -format 'yyMMdd')
     #-- EMAIL AND LOADING CONFIGS --#
     # change the value of sneakLoading if you are going to do an unscheduled import so
     # emails do not get sent to the campuses (values: $true or $false)
-    $sneakLoading = $false
+    $sneakLoading = $true
     # flag to change contents of email based on admissions cycle
     $peakCyle = $false
 
 
     if (!$sneakLoading) {
-       $alertEmail = ("UITS.DI.CORE@umassp.edu")
-       $errorEmail = ("UITS.DI.CORE@umassp.edu", "caohelp@commonapp.net")
-       $bostonEmail = ("UITS.DI.CORE@umassp.edu", "john.drew@umb.edu", "lisa.williams@umb.edu", "krystal.burgos@umb.edu")
-       $dartmouthEmail = ("UITS.DI.CORE@umassp.edu", "athompson@umassd.edu", "kmagnusson@umassd.edu", "j1mello@umassd.edu", "kvasconcelos@umassd.edu", "mortiz@umassd.edu")
-       $lowellEmail = ("UITS.DI.CORE@umassp.edu", "kathleen_shannon@uml.edu")
-       $bostonError = ("UITS.DI.CORE@umassp.edu", "caohelp@commonapp.net", "john.drew@umb.edu", "lisa.williams@umb.edu", "krystal.burgos@umb.edu")
-       $dartmouthError = ("UITS.DI.CORE@umassp.edu", "caohelp@commonapp.net", "athompson@umassd.edu", "kmagnusson@umassd.edu", "j1mello@umassd.edu", "kvasconcelos@umassd.edu", "mortiz@umassd.edu")
-       $lowellError = ("UITS.DI.CORE@umassp.edu", "caohelp@commonapp.net", "kathleen_shannon@uml.edu")
+       $alertEmail = ("gjenczyk@umassp.edu") #("UITS.DI.CORE@umassp.edu")
+       $errorEmail = ("gjenczyk@umassp.edu") #("UITS.DI.CORE@umassp.edu, caohelp@commonapp.net")
+       $bostonEmail = ("gjenczyk@umassp.edu") #("UITS.DI.CORE@umassp.edu, john.drew@umb.edu, lisa.williams@umb.edu, krystal.burgos@umb.edu")
+       $dartmouthEmail = ("gjenczyk@umassp.edu") #("UITS.DI.CORE@umassp.edu, athompson@umassd.edu, kmagnusson@umassd.edu, j1mello@umassd.edu, kvasconcelos@umassd.edu, mortiz@umassd.edu")
+       $lowellEmail = ("gjenczyk@umassp.edu") #("UITS.DI.CORE@umassp.edu, christine_bryan@uml.edu, kathleen_shannon@uml.edu")
+       $bostonError = ("gjenczyk@umassp.edu") #("UITS.DI.CORE@umassp.edu, caohelp@commonapp.net, john.drew@umb.edu, lisa.williams@umb.edu, krystal.burgos@umb.edu")
+       $dartmouthError = ("gjenczyk@umassp.edu") #("UITS.DI.CORE@umassp.edu, caohelp@commonapp.net, athompson@umassd.edu, kmagnusson@umassd.edu, j1mello@umassd.edu, kvasconcelos@umassd.edu, mortiz@umassd.edu")
+       $lowellError = ("gjenczyk@umassp.edu") #("UITS.DI.CORE@umassp.edu, caohelp@commonapp.net, christine_bryan@uml.edu, kathleen_shannon@uml.edu")
     } else {
-       $divertedEmail = ("gjenczyk@umassp.edu")
+       $divertedEmail = ("noone@nowhere.com")
        $comApSupport = $divertedEmail
        $errorEmail = $divertedEmail
        $bostonEmail = $divertedEmail
@@ -151,7 +151,7 @@ function commonAppUnzip ([string] $unzipCampus ) {
 
    #moves zips locally for faster processing.
 
-   Get-ChildItem -Path ${shareRoot}DI_${env}_COMMONAPP_AD_INBOUND -File ${unzipCampus}_*zip | ForEach-Object {
+   Get-ChildItem -Path ${shareRoot}DI_TST67_COMMONAPP_AD_INBOUND -File ${unzipCampus}_*zip | ForEach-Object {
     Move-Item -Path $_.FullName -Destination $inputDirectory
    }
 
@@ -312,6 +312,12 @@ function commonAppClean ([string] $cleanCampus) {
       if ((Get-Item $_.FullName).length -eq 0) {
         "$pdfName is empty :(" | Out-File -Append $runLog
       }
+      elseif ((Get-Item $_.FullName) -match "_SR_")
+      {
+        Move-Item -Path ${inputDirectory}1_unzipFiles\${cleanCampus}\$pdfName -Destination ${srDirectory}${pdfName}
+
+        "${srDirectory}${pdfName}" | Out-File -Append $runLog
+      }
       else 
       {
         Move-Item -Path ${inputDirectory}1_unzipFiles\${cleanCampus}\$pdfName -Destination ${outputDirectory}${pdfName} 
@@ -336,6 +342,7 @@ function commonAppClean ([string] $cleanCampus) {
 # building the working path - establishing directory locations
 
 $inputDirectory = "${root}DI_${env}_COMMONAPP_AD_INBOUND\"
+$srDirectory = "${root}DI_${env}_COMMONAPP_AD_OUTBOUND\"
 $outputDirectory = "${shareRoot}import_agent\DI_${env}_SA_AD_INBOUND\"
 $shareBase = "${shareRoot}DI_${env}_COMMONAPP_AD_INBOUND\"
 $archiveDirectory = "${inputDirectory}archive\"
@@ -346,7 +353,7 @@ cd $inputDirectory
 
 $DIImportLogging_workingPath = "${inputDirectory}ca_logs\"
 $DIImportLogging_completePath = "${root}import_agent\${env}_import_logs\"
-$runLogDir = "\\ssisnas215c2.umasscs.net\diimages67prd\log\"
+$runLogDir = "\\boisnas215c1.umasscs.net\diimages67tst\log\"
 $runLogDelim = "*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*"
 $runLogName = "running_log-commonAppImport.log"
 $runLog = "${runLogDir}${runLogName}"

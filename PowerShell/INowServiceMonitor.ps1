@@ -19,9 +19,9 @@
 # "$(Get-Date) " | Out-File -Append $runLog
 ##############################################################################>
 
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
 
-$logPath = "\\ssisnas215c2.umasscs.net\diimages67prd\log\INowServiceMonitor.log"
+$logPath = "\\boisnas215c1.umasscs.net\diimages67tst\log\INowServiceMonitor.log"
 
 $hostnm = hostname
 $env = $hostnm.ToUpper().substring(2,5)
@@ -35,7 +35,7 @@ $failureArray = @()
 $restartedServices = $false
 $failedServices = $false
 $successMessage = $false
-$foreignComputer = @("DIPRD67APPRAS01")
+$foreignComputer = @("DITST67APPRAS01")
 
 Get-Service | Where-Object {$_.Name -match "ImageNow Se*" -and $_.Status -eq "Stopped"} | ForEach-Object {
     
@@ -49,6 +49,7 @@ Get-Service | Where-Object {$_.Name -match "ImageNow Se*" -and $_.Status -eq "St
     }
     else
     {
+        $error[0] | Out-File -Append -FilePath $logPath
         $failedStart = $_.Name
         "Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
         $failureArray += "$failedStart"
@@ -71,6 +72,7 @@ Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Status -eq "Stopp
         }
         else
         {
+            $error[0] | Out-File -Append -FilePath $logPath
             $failedStart = $_.Name
             "Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
             $failureArray += "$failedStart"
@@ -82,7 +84,7 @@ Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Status -eq "Stopp
     if ($_.Name -match "ImageNow Import*")# -and $_.Status -eq 'Stopped')
     {
         $importService = $_.Name
-        $appServers = @("DIPRD67WEBIMG01", "DIPRD67WEBIMG02")
+        $appServers = @("DITST67WEBIMG01", "DITST67WEBIMG02")
         [System.Collections.ArrayList]$appArray = $appServers
 
         if ((Get-WmiObject -Class Win32_Service -Property StartMode -Filter "Name='$importService'") | Where-Object {$_.StartMode -match "Manual"})
@@ -101,6 +103,7 @@ Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Status -eq "Stopp
                 }
                 else
                 {
+                    $error[0] | Out-File -Append -FilePath $logPath
                     $failedStart = $importService
                     "Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
                     $failureArray += "$failedStart"
@@ -117,6 +120,7 @@ Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Status -eq "Stopp
                 }
                 else 
                 {
+                    $error[0] | Out-File -Append -FilePath $logPath
                     "Failed to stop $importService at $(Get-Date)" | Out-File -Append -FilePath $logPath
                     $failStopSub = "[DI $env Notice] Failed to stop $importService on $(hostname)"
                     $failStopMessage = "INowServiceMonitor has detected that the Import Agent service is running on two servers`nAn attempt to stop the second instance of the service was not successful.`nPlease stop the service on $(hostname) as soon as possible.`nFailure to stop the service may result in problems with imports."
@@ -138,6 +142,7 @@ Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Status -eq "Stopp
             }
             else
             {
+                $error[0] | Out-File -Append -FilePath $logPath
                 $failedStart = $importService
                 "Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
                 $failureArray += "$failedStart"
@@ -168,6 +173,7 @@ foreach ($computer in $foreignComputer)
         }
         else
         {
+            $error[0] | Out-File -Append -FilePath $logPath
             $failedStart = $foreignService
             "Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
             $failureArray += "$failedStart"
@@ -210,5 +216,5 @@ if ($restartedServices)
         }
     }
 
-    sendmail -t gjenczyk@umassp.edu, cmatera@umassp.edu, lprudden@umassp.edu -s $subject -m $message
+    sendmail -t gjenczyk@umassp.edu, cmatera@umassp.edu -s $subject -m $message
 }

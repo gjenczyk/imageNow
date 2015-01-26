@@ -19,8 +19,8 @@
 # #############################################################################
 
 #-- INCLUDES --#
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\enVar.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\enVar.ps1"
 
 #-- CONFIG --#
 
@@ -47,7 +47,7 @@ if ($filesTransferred) {
 
     $message = "Files have been moved from $oldShare to $env"
 
-    sendmail -t "UITS.DI.CORE@umassp.edu" -s "[DI ${env} Notice] ${scriptName}.ps1 has moved files" -m ${message}
+    sendmail -t "gjenczyk@umassp.edu" -s "[DI ${env} Notice] ${scriptName}.ps1 has moved files" -m ${message}
 
 }
 

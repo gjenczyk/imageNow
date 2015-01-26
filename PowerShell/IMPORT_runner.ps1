@@ -19,7 +19,7 @@
 # #############################################################################
 
 #-- INCLUDES --#
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
 
 #-- CONFIG --#
 
@@ -30,13 +30,13 @@ $env = $env -replace "W.*",""
 $logDate = $(get-date -format 'yyyyMMdd')
 
 #- LOGGING -#
-$runLog = "${root}log\running_log-scriptName.log"
+$runLog = "${root}log\runn_log-IMPORT.log"
 $scriptLog = "${root}log\ScriptName_${logDate}.log"
 
 #-- MAIN --#
 "$(get-date) - Starting ScriptName Script" | Out-File $runLog -Append
 
-D:\inserver6\bin64\intool --cmd run-iscript --file ${root}script\IMPORT_DSR_Archives.js
+D:\inserver6\bin64\intool --cmd run-iscript --file ${root}script\IMPORT_UMBSR_Undergraduate_AdmissionsFall.js
 
 <#
 Use this if you want to be notified when the script finishes running

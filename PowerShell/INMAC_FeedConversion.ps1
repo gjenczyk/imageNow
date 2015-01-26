@@ -1,0 +1,2 @@
+﻿Add-Content D:\inserver6\log\run_log-INMACFeedConversion.txt "Starting INMACFeedConversion Script at $(date)"
+D:\inserver6\bin64\intool --cmd run-iscript --file D:\inserver6\script\INMAC_FeedConversion.js

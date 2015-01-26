@@ -20,7 +20,7 @@
 # "$(Get-Date) " | Out-File -Append $runLog
 #############################################################################>
 
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
 
 $env = hostname
 $env = $env.ToUpper().substring(2,5)
@@ -35,7 +35,7 @@ $stoppedServices = $false
 $failedServices = $false
 $successMessage = $false
 
-Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Name -notmatch "ImageNow Se*"} | ForEach-Object {
+Get-Service | Where-Object {$_.Name -match "ImageNow Se*"} | ForEach-Object {
 
         if ($_.Status -eq 'Running')
         {
@@ -59,7 +59,7 @@ Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Name -notmatch "I
     
 }
 
-Get-Service | Where-Object {$_.Name -match "ImageNow Se*"} | ForEach-Object {
+Get-Service | Where-Object {$_.Name -match "ImageNow*"} | ForEach-Object {
 
         if ($_.Status -eq 'Running')
         {
@@ -116,5 +116,5 @@ if ($stoppedServices)
         }
     }
 
-    sendmail -t gjenczyk@umassp.edu, cmatera@umassp.edu, lprudden@umassp.edu -s $subject -m $message
+    sendmail -t gjenczyk@umassp.edu, cmatera@umassp.edu -s $subject -m $message
 }

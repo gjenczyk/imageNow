@@ -27,30 +27,30 @@ Param([string]$csvPath,
       )
 
 #- INCLUDES -#
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
 
 #- VARIABLES -#
-$log = '\\ssisnas215c2.umasscs.net\diimages67prd\log\email.log'
+$log = '\\boisnas215c1.umasscs.net\diimages67tst\log\email.log'
 $csvPath | Out-File  $log -Append
 $docPath | Out-File $log -Append
 $errorReason | Out-File $log -Append
 
 $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
-$root = "Y:\"
+$root = "\\boisnas215c1.umasscs.net\di_interfaces\"
 $csvName = $csvPath -replace ".*\\",""
 $docName = $docPath -replace ".*\\",""
 $importType = $docName -replace "_.*",""
 $successDir = $docPath -replace "[^\\]*$",""
 
 #- Email Selector -#
-$bostonGA = ("UITS.DI.CORE@umassp.edu","Peggy.Patel@umb.edu", "mary.ryan@umb.edu")
-$bostonUA = ("UITS.DI.CORE@umassp.edu","john.drew@umb.edu", "Lisa.Williams@umb.edu", "mary.ryan@umb.edu")
-$dartmouthGA = ("UITS.DI.CORE@umassp.edu","graduate@umassd.edu","j1mello@umassd.edu")
-$dartmouthUA = ("UITS.DI.CORE@umassp.edu","Athompson@umassd.edu", "cgoodine@umassd.edu", "j1mello@umassd.edu")
-$lowellGA = ("UITS.DI.CORE@umassp.edu", "linda_southworth@uml.edu", "Daniel_Bedard@uml.edu", "Barbara_Dougherty@uml.edu")
-$lowellUA = ("UITS.DI.CORE@umassp.edu", "Kathleen_Shannon@uml.edu", "Dania_Valdes@uml.edu", "Daniel_Bedard@uml.edu")
-$DISupport = ("UITS.DI.CORE@umassp.edu")
+$bostonGA = ("gjenczyk@umassp.edu","")
+$bostonUA = ("gjenczyk@umassp.edu","")
+$dartmouthGA = ("gjenczyk@umassp.edu","")
+$dartmouthUA = ("gjenczyk@umassp.edu","")
+$lowellGA = ("gregg_jenczyk@student.uml.edu")
+$lowellUA = ("gjenczyk@umassp.edu", "gregg_jenczyk@student.uml.edu")
+$DISupport = ("gjenczyk@umassp.edu")
 
 function campusSwitch ([string] $emailOffice) {
     #selects the correct target emails based on campus and career
@@ -88,6 +88,7 @@ if ($importType -eq "WADOC") {
 } elseif ($importType -eq "CA") {
     $fileInfo = [regex]::split($docName, '_')
     $campus = $fileInfo[2]
+    $csvPath = '';
     switch ($campus) {
         B {$campus = "UMBOS"; break}
         D {$campus = "UMDAR"; break}
@@ -142,7 +143,7 @@ if ($csvPath -ne ''){
 }
 
 $combo = $campus + " " + $appCenter
-
+echo $combo
 sendmail -t  $(campusSwitch($combo)) -s "$messageTitle" -a @($attachments) -m $messageBody
-
+#gjenczyk@umassp.edu
 $error[0] | Out-File $log -Append

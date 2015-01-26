@@ -19,7 +19,7 @@
 
  function sendmail{
     #values that can be passed to sendmail. this list is extensible
-    param([string[]]$to, [string]$f, [string]$s, [string]$m, [string[]]$a)
+    param([string[]]$to, [string]$f, [string]$s, [string]$m, [string[]]$a, [string]$flag)
 
      #SMTP server name
      $smtpServer = "69.16.78.38"
@@ -56,6 +56,13 @@
     if ($a){
     #usage for $a: -a "attachment","2ndAttachment","etc"
      $mailParams += @{Attachment = $a}
+     }
+
+     if ($flag){
+        if ($flag -eq "BodyAsHtml")
+        {
+            $mailParams += @{BodyAsHtml = $true}
+        }
      }
   
    Send-MailMessage @mailParams 

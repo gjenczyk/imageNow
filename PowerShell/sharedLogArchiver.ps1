@@ -18,12 +18,13 @@
 # #############################################################################>
 
 #-- INCLUDES --#
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
 
 #-- CONFIGURATION --#
 
-$shareRoot = "\\ssisnas215c2.umasscs.net\diimages67prd\"
+$shareRoot = "\\boisnas215c1.umasscs.net\diimages67tst\"
 $shareLog = "${shareRoot}log\"
+$shareAudit = "${shareRoot}audit\"
 $runLog = "${shareLog}run_log-logArchiver.log"
 $yesterday = (Get-Date).AddDays(0).Date
 
@@ -52,7 +53,7 @@ $zip = "${zipBase}.zip"
 
 New-Item -Path $zipBase -ItemType Directory
 
-$files = Get-ChildItem $shareLog -Exclude "run_log*","Archive*" -Recurse -af | Where-Object {$_.LastWriteTime.Date -lt $yesterday}
+$files = Get-ChildItem $shareLog, $shareAudit -Exclude "run_log*","Archive*" -Recurse -af | Where-Object {$_.LastWriteTime.Date -lt $yesterday}
 
 foreach($file in $files){
 

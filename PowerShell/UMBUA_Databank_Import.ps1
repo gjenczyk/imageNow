@@ -17,17 +17,17 @@
 # #############################################################################
 
 #INCLUDES
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\unZip.ps1"
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\unZip.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
 
 # CONFIG #
 
 $startDir = pwd
 
-$root = "Y:\"
+$root = "\\boisnas215c1.umasscs.net\di_interfaces\"
 $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
-$DIemail = @("UITS.DI.CORE@umassp.edu", "Terence.phalen@umb.edu")
+$DIemail = "gjenczyk@umassp.edu" #@("gjenczyk@umassp.edu", "gregg_jenczyk@student.uml.edu")
 #- Date formatting -#
 $myDate = (get-date -format 'yyyy-MM-dd')
 $shortDate = (get-date -format 'yyyyMMdd')
@@ -47,8 +47,8 @@ $errorDirectory = "${inputDirectory}error\"
 $archiveDirectory = "${inputDirectory}archive\"
 $dataBankLog_workingPath = "${inputDirectory}logs\"
 
-#runlog setup
-$runLogPath = "\\ssisnas215c2.umasscs.net\diimages67prd\log\"
+#logging setup
+$runLogPath = "\\boisnas215c1.umasscs.net\diimages67tst\log\"
 $runLogFileName = "run_log-UMBUA_Databank_Import.log"
 $fullRunLog = "${runLogPath}${runLogFileName}"
 $scriptLog = "D:\inserver6\log\UMBUA_Databank_Import_$y$m$d.log"
@@ -105,12 +105,19 @@ Get-ChildItem -Path *.zip | ForEach-Object {
     sendmail -to $DIemail -s "[DI $env Error] Databank Import Error" -m $errorText
     Move-Item $_ ${errorDirectory}
     } else {
-        Move-Item $_ ${archiveDirectory}
+        $moveStatus = $(Move-Item $_ ${archiveDirectory})
+        if (!$moveStatus)
+        {
+            $errorText = "Possible duplicate file detected.`nPlease verify that $($_.Name) was not already processed."
+            $errorText += "`nFile was still processed and moved to ${archiveDirectory}."
+            sendmail -to $DIemail -s "[DI $env Error] Databank Import Error" -m $errorText
+            Rename-Item -path $_ -newName {$_.Name -replace ".zip","_DUPE_.zip"}
         }
+    }
 
 } # end Get-ChildItem
 
-D:\inserver6\bin64\intool --cmd run-iscript --file \\ssisnas215c2.umasscs.net\diimages67prd\script\UMBUA_Databank_Import\UMBUA_Databank_Import.js
+D:\inserver6\bin64\intool --cmd run-iscript --file \\boisnas215c1.umasscs.net\diimages67tst\script\UMBUA_Databank_Import\UMBUA_Databank_Import.js
 $endTime = Get-Date
 "UMBUA_Databank_Import.ps1 finished running at $endTime" | Out-File -Append $fullRunLog
 $totalTime = $endTime-$startTime
@@ -122,7 +129,7 @@ $subject = "[DI $env Notice] DataBank files Received for ${myDate}"
 if ((${logName}) -eq $null ){
     $subject = "[DI $env Notice] No DataBank files Received on ${myDate}"        
     $message = "No files were received on ${myDate} for the ${h}:${mi} load."
-    sendmail -to $DIemail -s $subject -m $message
+    #sendmail -to $DIemail -s $subject -m $message
 } 
 elseif (Test-Path ${logName}) 
 {

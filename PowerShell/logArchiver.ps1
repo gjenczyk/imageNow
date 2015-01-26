@@ -18,7 +18,8 @@
 # #############################################################################>
 
 #-- INCLUDES --#
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\enVar.ps1"
 
 #-- CONFIGURATION --#
 
@@ -27,6 +28,10 @@ $inserver6 = "${localRoot}inserver6\"
 $localLog = "${inserver6}log\"
 $runLog = "${localLog}run_log-logArchiver.log"
 $yesterday = (Get-Date).AddDays(0).Date
+
+$fatalFlag = $false
+$fatalFileArray = @()
+
 
 #- Date formatting -#
 $la = (Get-Date -Format yyyy.MM.dd.hh.mm.ss)
@@ -38,6 +43,9 @@ $h = $l[3]
 $mi = $l[4]
 $s = $l[5]
 
+$zipBase = "${localLog}Archive_log_$y$m$d`_$h.$mi.$s"
+$zip = "${zipBase}.zip"
+
 #-- FUNCTION --#
 
 function ZipFile( $zipfilename, $sourcedir )
@@ -47,9 +55,23 @@ function ZipFile( $zipfilename, $sourcedir )
     [System.IO.Compression.ZipFile]::CreateFromDirectory( $sourcedir, $zipfilename, $compressionLevel, $false )
 }
 
+function ErrorCheck( $file )
+{
+    if(Select-String -Path $file -Pattern "Fatal iScript Error!")
+    {
+        $script:fatalFlag = $true  
+        $script:fatalFileArray += $file.Name+"`n"
+    }
+}
 
-$zipBase = "${localLog}Archive_log_$y$m$d`_$h.$mi.$s"
-$zip = "${zipBase}.zip"
+function EmailNotify
+{
+    $body = "The following log files on $machine contained fatal errors:`n $fatalFileArray The logs have been archived in $zip.  `nPlease review to see if corrective action is required."
+    sendmail -to "gjenczyk@umassp.edu" -s "[DI $env Warning] Fatal iScript Errors Detected on $machine" -m $body
+}
+
+
+#-- MAIN --#
 
 New-Item -Path $zipBase -ItemType Directory
 
@@ -57,9 +79,18 @@ $files = Get-ChildItem $localLog -Exclude "run_log*","Archive*" -Recurse -af | W
 
 foreach($file in $files){
 
+   ErrorCheck($file)
+
    Move-Item $file -Destination $zipBase
 }
 
 ZipFile $zip $zipBase
 
 Remove-Item -Path $zipBase -Recurse -Force
+
+"fatal flag = $fatalFlag" | Out-File -Append $runLog
+
+if ($fatalFlag)
+{
+   EmailNotify
+}

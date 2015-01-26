@@ -24,3 +24,26 @@ function unZip ($file, $destination) {
 
     [IO.Compression.ZipFile]::ExtractToDirectory( $ZipFile, $destination )
 }
+
+
+
+<#function unZip ($file, $destination) {
+
+    if ((get-item $file).Length -eq 0){
+
+    return $false
+
+    } else {
+
+    $shell = (new-object -com shell.application)
+    $zip = ($shell.NameSpace($file))
+    foreach($item in $zip.items())
+    {
+        $shell.Namespace($destination).copyhere($item)
+        #echo "Extracting $file to $destination..."
+    } 
+
+    return $true
+
+    }
+}#>

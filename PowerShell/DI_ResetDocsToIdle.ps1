@@ -19,12 +19,12 @@
 # #############################################################################
 
 #-- INCLUDES --#
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
 
 #-- CONFIG --#
 
 $localRoot = "D:\"
-$root = "\\ssisnas215c2.umasscs.net\diimages67prd\"
+$root = "\\boisnas215c1.umasscs.net\diimages67tst\"
 $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
 $logDate = $(get-date -format 'yyyyMMdd')
@@ -36,7 +36,7 @@ $runLog = "${root}log\running_log-DI_ResetDocsToIdle.log"
 #-- MAIN --#
 "$(get-date) - Starting DI_ResetDocsToIdle Script" | Out-File $runLog -Append
 
-#D:\inserver6\bin64\intool --cmd reset-item-status
+D:\inserver6\bin64\intool --cmd reset-item-status
 
 <#
 Use this if you want to be notified when the script finishes running

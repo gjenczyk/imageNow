@@ -18,12 +18,12 @@
 # #############################################################################>
 
 #-- INCLUDES --#
-. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
 
 #-- CONFIG --#
 
 $localRoot = "D:\"
-$root = "\\ssisnas215c2.umasscs.net\diimages67prd\"
+$root = "\\boisnas215c1.umasscs.net\diimages67tst\"
 $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
 $logDate = $(get-date -format 'yyyyMMdd')
