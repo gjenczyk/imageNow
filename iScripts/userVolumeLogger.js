@@ -13,6 +13,9 @@
         Mod Summary:
                Date-Initials: Modification description.
 
+               01302015-GJ: Version 1.1 - convert Hour colum to 12 hr clock
+                                        - add total row to bottom of table
+
 
 
 ********************************************************************************/
@@ -38,7 +41,7 @@
 // ********************* Initialize global variables ********************
 
 var logDir = imagenowDir6 + "\\script\\log\\";
-var POWERSHELL_EMAIL = "\\\\boisnas215c1.umasscs.net\\diimages67tst\\script\\PowerShell\\processUserVolumeLogs.ps1"
+var POWERSHELL_EMAIL = "\\\\ssisnas215c2.umasscs.net\\diimages67prd\\script\\PowerShell\\processUserVolumeLogs.ps1"
 var POWERSHELL_ROOT = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
 
 sql = "SELECT IN_SC_USR.USR_ID, "+
@@ -75,6 +78,7 @@ sql = "SELECT IN_SC_USR.USR_ID, "+
       debug = new iScriptDebug("userVolumeLogger", LOG_TO_FILE, DEBUG_LEVEL);
       debug.log("WARNING", "userVolumeLogger script started.\n");
 
+      // set up date info to be used for rest of run
       var date = new Date();
       var currentDate = "" + (date.getMonth()+1) + date.getDate() + date.getFullYear();
       var currentTime = date.toString().split(" ");
@@ -96,13 +100,15 @@ sql = "SELECT IN_SC_USR.USR_ID, "+
       //if the time is X, call the powershell script to process the previous day's output
       if (currentHour == 23)
       {
+        //add summary row to csv   
+        totalLine(time);
         //kick off powershell script
           //read the file
           //convert the data to a pivot table
           //email the pivot table
           //delete the old log after it's been processed!
           var cmd = "";
-          Clib.sprintf(cmd, '%s %s', POWERSHELL_ROOT, POWERSHELL_EMAIL);
+          Clib.sprintf(cmd, '%s %s %s', POWERSHELL_ROOT, POWERSHELL_EMAIL, time.curDate);
           var rtn = exec(cmd, 0);
       }
 
@@ -151,7 +157,14 @@ sql = "SELECT IN_SC_USR.USR_ID, "+
 
 ****************************************************************/
 function incrementCampusCount(campusOffice){
-  var co = campusOffice.toUpperCase()
+
+  var co = "";
+  //handles cases where the office isn't spelled out
+  if (campusOffice)
+  {
+    co = campusOffice.toUpperCase();
+  }
+  
   if (co == "BOSTON")
   {
     bostonCount++;
@@ -181,30 +194,34 @@ function incrementCampusCount(campusOffice){
 ****************************************************************/
 
 function hourlyUserCount(timeObj){
- var returnVal;
-      var cur = getHostDBLookupInfo_cur(sql,returnVal); 
+
+  var returnVal;
+  var cur = getHostDBLookupInfo_cur(sql,returnVal); 
             
-      if(!cur || cur == null)
-      {
-        debug.log("WARNING","no results returned for query.\n");
-        return false;
-      }
+  if(!cur || cur == null)
+  {
+    debug.log("WARNING","No users currently logged in.\n");
+  }
+  else
+  {
+    //give credit to the correct campus & increment total count
+    while(cur.next())
+    {
+      incrementCampusCount(cur[5]);
+      userTotal++;
+    } 
+  }
 
-      while(cur.next())
-      {
-        incrementCampusCount(cur[5]);
-        userTotal++;
-      } 
+  debug.log("INFO","Hour [%s] USERTOTAL: %s | bostonCount = %s; dartmouthCount = %s; lowellCount = %s; uitsCount = %s; otherCount = %s;\n", timeObj.curHour ,userTotal, bostonCount, dartmouthCount, lowellCount, uitsCount, otherCount);
+  //build the string to write to the csv
+  var csvLine = easyTime(timeObj.curHour) + "," + userTotal + "," + bostonCount + "," + dartmouthCount + "," + lowellCount + "," + uitsCount + "," + otherCount + "\n";
+  //build the running count user log name
+  var userLog = logDir + "userVolumeLogger_R_" + timeObj.curDate + ".csv";
 
-      debug.log("INFO","Hour [%s] USERTOTAL: %s | bostonCount = %s; dartmouthCount = %s; lowellCount = %s; uitsCount = %s; otherCount = %s;\n", timeObj.curHour ,userTotal, bostonCount, dartmouthCount, lowellCount, uitsCount, otherCount);
-      //build the string to write to the csv
-      var csvLine = timeObj.curHour + "," + userTotal + "," + bostonCount + "," + dartmouthCount + "," + lowellCount + "," + uitsCount + "," + otherCount + "\n";
-
-      var userLog = logDir + "userVolumeLogger_R_" + timeObj.curDate + ".csv";
-
-      var uL = Clib.fopen(userLog, "a");
-      Clib.fputs(csvLine, uL);
-      Clib.fclose(uL);
+  //write to the user log
+  var uL = Clib.fopen(userLog, "a");
+  Clib.fputs(csvLine, uL);
+  Clib.fclose(uL);
 } // end hourlyUserCount
 
 /****************************************************************
@@ -215,6 +232,7 @@ function hourlyUserCount(timeObj){
 
 function currentUsers(timeObj){
 
+  //add this line for some reason		
   sql += " AND IN_LIC_MON.LOGIN_TIME = TO_CHAR(IN_LIC_MON.LOGIN_TIME,'YYYY-MON-DD HH24:MI:SS')"
 
   var returnVal;
@@ -227,12 +245,15 @@ function currentUsers(timeObj){
   }
 
   var numCol = cur.columns();
+  //build log file name
   var detailLog = logDir + "userVolumeLogger_D_" + timeObj.curDate + ".csv";
   var dL = Clib.fopen(detailLog, "a");
-  var detailedLine = "";
+  
 
   while(cur.next())
   {
+    //add time and convert to csv format
+    var detailedLine = timeObj.curHour + ",";
     for (var i = 0; i < numCol-1; i ++)
     {
       detailedLine += cur[i] + ",";
@@ -242,7 +263,6 @@ function currentUsers(timeObj){
 
       Clib.fputs(detailedLine, dL);
       incrementCampusCount(cur[5]);
-      userTotal++;
   } 
 
     Clib.fclose(dL);
@@ -257,7 +277,7 @@ function exec(cmd, expected_return)
   // tiffcp doesn't return 0 on success
   if(rtn != expected_return)
   {
-    debug.log("ERROR", "Couldn't call system cmd: %s\n", cmd);
+    debug.log("ERROR", "Couldn't call system cmd: %s. rtn: %s\n", cmd, rtn);
     return false;
   }
   else
@@ -265,5 +285,72 @@ function exec(cmd, expected_return)
     return true;
   }
 } // end exec
+
+// converts military time to 12 hr clock
+function easyTime(milHour)
+{
+  var fixedTime = "";
+  
+  milHour = parseInt(milHour, 10);
+  if (milHour == 0)
+  {
+    fixedTime = 12 + " AM"
+  }
+  else if (milHour > 0 && milHour < 12)
+  {
+    fixedTime = milHour + " AM";
+  }
+  else if (milHour == 12)
+  {
+    fixedTime = milHour + " PM";
+  }
+  else if (milHour > 12 && milHour <= 23)
+  {
+    fixedTime = (milHour - 12) + " PM";
+  }
+  else
+  {
+    fixedTime = "Error";
+  }
+
+  return fixedTime;
+} // end easyTime
+
+// create a line in the csv that totals everything
+function totalLine(tdate)
+{
+  printf("does it make it here?\n");
+  //write to the user log
+  var line = "";
+  var totalSum = 0;
+  var totalBos = 0;
+  var totalDar = 0;
+  var totalLow = 0;
+  var totalUITS = 0;
+  var totalOth = 0;
+  var floor = Math.floor;
+  var fcountCsv = logDir + "userVolumeLogger_R_" + tdate.curDate + ".csv";
+  var fC = Clib.fopen(fcountCsv, "r");
+
+  while ((line=Clib.fgets(fC)) != null)
+  {
+    var row = line.split(",")
+
+    totalSum += floor(row[1]);
+    totalBos += floor(row[2]);
+    totalDar += floor(row[3]);
+    totalLow += floor(row[4]);
+    totalUITS += floor(row[5]);
+    totalOth += floor(row[6]);
+  }
+  Clib.fclose(fC);
+
+  var totalRow = "TOTALS,"+totalSum+","+totalBos+","+totalDar+","+totalLow+","+totalUITS+","+totalOth
+
+  var fR = Clib.fopen(fcountCsv, "a");
+  Clib.fputs(totalRow, fR);
+  Clib.fclose(fR);
+  
+} // end totalLine
 
 //
