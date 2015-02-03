@@ -81,10 +81,9 @@ sql = "SELECT IN_SC_USR.USR_ID, "+
       // set up date info to be used for rest of run
       var date = new Date();
       var currentDate = "" + (date.getMonth()+1) + date.getDate() + date.getFullYear();
-      var currentTime = date.toString().split(" ");
-      currentTime = currentTime[3].split(":");
-      var currentHour = currentTime[0];
-
+      var currentHour = "" + date.getHours();
+      var currentTime = currentHour + ":" + pad(date.getMinutes());
+      
       // packages up the time object nicely
       var time = { curDate : currentDate,
                    curTime : currentTime,
@@ -352,5 +351,10 @@ function totalLine(tdate)
   Clib.fclose(fR);
   
 } // end totalLine
+
+function pad(n) 
+{ 
+  return ("0" + n).slice(-2); 
+} // end padding
 
 //
