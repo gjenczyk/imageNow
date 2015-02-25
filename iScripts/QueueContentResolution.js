@@ -67,7 +67,7 @@ function main ()
                     "ON INUSER.IN_VERSION.VERSION_ID = INUSER.IN_LOGOB.VERSION_ID "+
                     "INNER JOIN INUSER.IN_PHSOB "+
                     "ON INUSER.IN_PHSOB.PHSOB_ID = INUSER.IN_LOGOB.PHSOB_ID "+
-                    "INNER JOIN INUSER.IN_DOC_KW "+
+                    "FULL OUTER JOIN INUSER.IN_DOC_KW "+
                     "ON INUSER.IN_DOC_KW.DOC_ID = INUSER.IN_DOC.DOC_ID "+
                     "INNER JOIN INUSER.IN_INSTANCE_PROP "+
                     "ON INUSER.IN_DOC.INSTANCE_ID = INUSER.IN_INSTANCE_PROP.INSTANCE_ID "+
@@ -137,8 +137,19 @@ function main ()
                 var CSV_Name = CSV_DIR+folder+".csv";
                 var DOC_Name = DOC_DIR+fileName;
 
-                //trimming errors so we only see the last one  
-                var notes = "'"+fullNotes.substring(fullNotes.lastIndexOf("INMAC ERR: "),fullNotes.lastIndexOf(' ('))+"'";
+                //trimming errors so we only see the last one 
+                var notes = ""; 
+
+                if (!fullNotes || fullNotes == null)
+                {
+                	debug.log("DEBUG","NO NOTES\n");
+                	notes = "'INMAC ERR: Document could not be converted, no flag set'";
+                }
+                else
+                {
+                	debug.log("DEBUG","NOTES\n");
+                	notes = "'"+fullNotes.substring(fullNotes.lastIndexOf("INMAC ERR: "),fullNotes.lastIndexOf(' ('))+"'";
+                }
                 //printf("%s\n",notes);
                 //debug.log("ERROR","Here we are [%s\n\t %s\n\t %s\n\t %s\n\t %s\n\t]\n", POWERSHELL_ROOT, POWERSHELL_EMAIL, CSV_Name, DOC_Name, notes);
                 Clib.sprintf(cmd, '%s %s %s %s %s', POWERSHELL_ROOT, POWERSHELL_EMAIL, CSV_Name, DOC_Name, notes);
