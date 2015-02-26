@@ -70,8 +70,8 @@ function main ()
             month = padIfNot2(month);
             day = padIfNot2(day);
 
-            var currentTime = hours+":"+minutes
-            var dbDate = month+day+year
+            var currentTime = hours+":"+minutes;
+            var dbDate = ""+month+day+year;
 
             debug.log("DEBUG","The current DB time is %s on %s, %s.\n",currentTime, weekDay, dbDate);
 
@@ -267,7 +267,8 @@ function loadStatusCheck(report,checkDate,stage) {
 
   //Variable set up
   var ERROR_WF_INFO = "";
-  var ERROR_TABLES = "";
+  var OTHER_TABLES = "";
+  var OTHER_ANDS = "";
 
   if (stage == 1)
   {
@@ -288,8 +289,9 @@ function loadStatusCheck(report,checkDate,stage) {
                    "ON INUSER.IN_DOC.DOC_ID = INUSER.IN_WF_ITEM.OBJ_ID " +
                    "INNER JOIN INUSER.IN_WF_QUEUE " +
                    "ON INUSER.IN_WF_QUEUE.QUEUE_ID = INUSER.IN_WF_ITEM.QUEUE_ID " +
-                   "INNER JOIN INUSER.IN_DOC_KW " +
+                   "FULL OUTER JOIN INUSER.IN_DOC_KW " +
                    "ON INUSER.IN_DOC.DOC_ID = INUSER.IN_DOC_KW.DOC_ID "
+    OTHER_ANDS = "AND INUSER.IN_WF_QUEUE.QUEUE_NAME IN ('INMAC SA AD Error','INMAC SA AD Holding') "
   }
 
   //filter out the on demand profiles
@@ -315,7 +317,8 @@ function loadStatusCheck(report,checkDate,stage) {
             "WHERE INUSER.IN_DRAWER.DRAWER_NAME = '"+DRAWER_NAME+"' " +
             "AND INUSER.IN_INSTANCE.DELETION_STATUS <> 1 " +
             "AND INUSER.IN_DOC.FOLDER like '" + report + "%' " +
-            "AND INUSER.IN_VERSION.CREATION_TIME > TO_DATE('"+checkDate+" 06:00:00AM','MMDDYYYY HH:MI:SSAM')";
+            OTHER_ANDS + 
+            "AND INUSER.IN_VERSION.CREATION_TIME > TO_DATE('"+checkDate+" 12:00:00PM','MMDDYYYY HH:MI:SSAM')";
   var returnVal; 
   var cur = getHostDBLookupInfo_cur(sql,returnVal);
             
