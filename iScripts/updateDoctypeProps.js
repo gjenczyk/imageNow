@@ -7,7 +7,7 @@
 ---------------------------------------------------------------------------------
         Summary:
                This script will change the custom properties on a doctype.  It can
-               be used to add, remove, or reorder all CPs on a given doctype.
+               be used to add or remove all CPs on a given doctype.
                
         Mod Summary:
                Date-Initials: Modification description.
@@ -22,7 +22,6 @@
 //#link "secomobj" //COM object
 #include "$IMAGENOWDIR6$\\script\\lib\\iScriptDebug.jsh"
 #include "$IMAGENOWDIR6$\\script\\lib\\HostDBLookupInfo.jsh"
-#include "$IMAGENOWDIR6$\\script\\lib\\PropertyManager.jsh"
 
 // *********************         Configuration        *******************
 
@@ -38,8 +37,8 @@
 // ********************* Initialize global variables ********************
 
 DOCTYPES_TO_UPDATE = ["test"]; //all doctypes to work
-CPS_TO_ADD = [{name:"",position:""}]; //all CPs to add
-CPS_TO_REMOVE = [{name:"Alias"},{name:"Alias 1"}]; //all CPs to remove
+CPS_TO_ADD = [{name:"Alias",position:2}]; //all CPs to add
+CPS_TO_REMOVE = [{name:""}]; //all CPs to remove
 DOCTYPE_OK = {name:"DOCTYPE_OK",value:false};
 CP_ADD_OK = {name:"CP_ADD_OK",value:false};
 CP_REMOVE_OK = {name:"CP_REMOVE_OK",value:false};
@@ -89,7 +88,7 @@ CP_REMOVE_OK = {name:"CP_REMOVE_OK",value:false};
             debug.log("DEBUG","Number of custom properties: %d\n",props.length);
             for (i=0; i<props.length; i++)
             {
-                debug.log("INFO","Doctype CPs: id:%s, name:%s, isRequired:%s \n",props[i].id, props[i].name, props[i].isRequired);
+                debug.log("INFO","EXISTING DOCTYPE PROPS: id:%s, name:%s, isRequired:%s \n",props[i].id, props[i].name, props[i].isRequired);
                 propArr.push(props[i]);
             }//end for (i=0; i<props.length; i++)
           }
@@ -99,11 +98,29 @@ CP_REMOVE_OK = {name:"CP_REMOVE_OK",value:false};
             return false;
           }//end if (docType.getInfo()) else
 
+
+
           //if adding values
           if(CP_ADD_OK.value)
           {
             debug.log("INFO","Adding CPs to [%s]\n",docType.name);
-            //do something here to update the document with new valuss
+              
+            for (var g = 0; g < CPS_TO_ADD.length; g++)
+            {
+                debug.log("DEBUG","Adding: [%s] [%s]\n",CPS_TO_ADD[g].position,CPS_TO_ADD[g].name)
+                var propa = [];
+                propa[0] = new INClassProp();
+                propa[0].name = CPS_TO_ADD[g].name;
+                propa[0].isRequired  = false;
+                propArr.splice(CPS_TO_ADD[g].position,0,propa[0]);
+            }
+
+           if (!updateDoc(docType,propArr))
+            {
+              debug.log("ERROR","Could not update doctype [%s]\n",docType.name);
+              return false;
+            }
+
           }//end if adding values
 
           //if removing values
@@ -121,18 +138,9 @@ CP_REMOVE_OK = {name:"CP_REMOVE_OK",value:false};
               }
             }//end for (var l = 0; l < propArr.length; l++)
 
-            for (i=0; i<propArr.length; i++)
+           if (!updateDoc(docType,propArr))
             {
-              debug.log("DEBUG","NEW DOCTYPE PROPS: id:%s, name:%s, isRequired:%s \n",propArr[i].id, propArr[i].name, propArr[i].isRequired);
-            } //end for (i=0; i<propArr.length; i++)
-
-            if(docType.update(docType.name, docType.desc, docType.isActive, 0, propArr))
-            {
-              debug.log("INFO","Successfully updated document type [%s].\n", docType.name);
-            } 
-            else
-            {
-              debug.log("ERROR","Aborting - Failed to update document type - %s\n.", getErrMsg());
+              debug.log("ERROR","Could not update doctype [%s]\n",docType.name);
               return false;
             }
           }//end if removing values
@@ -279,5 +287,25 @@ function checkDocTypes(dtArr, dtFlag)
   debug.log("INFO","Setting [%s] to [%s].\n",dtFlag.name, dtFlag.value);
   return true;
 }//end checkDocTypes
+
+//function to update doctype
+function updateDoc(docType1, propArr1)
+{
+  for (i=0; i<propArr1.length; i++)
+  {
+    debug.log("DEBUG","NEW DOCTYPE PROPS: id:%s, name:%s, isRequired:%s \n",propArr1[i].id, propArr1[i].name, propArr1[i].isRequired);
+  }
+
+  if(docType1.update(docType1.name, docType1.desc, docType1.isActive, 0, propArr1))
+  {
+    debug.log("INFO","Successfully updated document type [%s].\n", docType1.name);
+  } 
+  else
+  {
+    debug.log("ERROR","Aborting - Failed to update document type - %s\n.", getErrMsg());
+    return false;
+  }
+  return true;
+}
 
 //
