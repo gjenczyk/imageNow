@@ -37,7 +37,7 @@
 // ********************* Initialize global variables ********************
 
 DOCTYPES_TO_UPDATE = ["test"]; //all doctypes to work
-CPS_TO_ADD = [{name:"Alias",position:2}]; //all CPs to add
+CPS_TO_ADD = [{name:"Alias",position:2},{name:"Alias 1",position:"gorble"},{name:"Alias 3"},{name:"Alias 2",position:4},{name:"DOB",position:"5"},{name:"CEEB",position:"5"}]; //all CPs to add. position = element # in array
 CPS_TO_REMOVE = [{name:""}]; //all CPs to remove
 DOCTYPE_OK = {name:"DOCTYPE_OK",value:false};
 CP_ADD_OK = {name:"CP_ADD_OK",value:false};
@@ -94,6 +94,7 @@ CP_REMOVE_OK = {name:"CP_REMOVE_OK",value:false};
           }
           else
           {
+            //create it here if we want to do that?
             debug.log("ERROR","Failed to retrieve info for document type - Error: %s\n.", getErrMsg());
             return false;
           }//end if (docType.getInfo()) else
@@ -105,7 +106,47 @@ CP_REMOVE_OK = {name:"CP_REMOVE_OK",value:false};
           {
             debug.log("INFO","Adding CPs to [%s]\n",docType.name);
               
-            for (var g = 0; g < CPS_TO_ADD.length; g++)
+            //get the number of props to be inserted, sort them, and increment the postion appropriately.  
+            //verify that we have a valid positional parameter.  If not, insert it at the end of the list.
+            var propLen = propArr.length;
+            var insLen = CPS_TO_ADD.length;
+            var posMod = 0;
+
+            for (var f = 0; f < insLen; f++)
+            {
+              //set position if we have a bad value.
+              if(!parseInt(CPS_TO_ADD[f].position) || !CPS_TO_ADD[f].position || CPS_TO_ADD[f].position == null)
+              {
+                debug.log("WARNING","Passed bad value for position: [%s] position: [%s]\n",CPS_TO_ADD[f].name, CPS_TO_ADD[f].position);
+                CPS_TO_ADD[f].position = propLen + posMod;
+                debug.log("INFO","New position for [%s] is [%s]\n",CPS_TO_ADD[f].name, CPS_TO_ADD[f].position);
+                posMod++;
+              }
+              //catch it if people enter int as a string
+              if (typeof CPS_TO_ADD[f].position == "string")
+              {
+                 CPS_TO_ADD[f].position = Number(CPS_TO_ADD[f].position);
+              }
+            }//end for (var f = 0; f < insLen; f++)
+
+            //now that that's done, sort CPS_TO_ADD by position and increment values so they go where you want them to!
+            CPS_TO_ADD.sort(function(a, b){return a.position-b.position});
+
+            //now, adjust postion so props go where you want them to
+            for (var e = 0; e < insLen; e++)
+            {
+              if (CPS_TO_ADD[e].position <= propLen)
+              {
+                CPS_TO_ADD[e].position +=e;
+              }
+              else
+              {
+                CPS_TO_ADD[e].position = propLen + e;
+              }
+            }//end for (var e = 0; e < insLen; e++)
+
+            //insert the values in the array
+            for (var g = 0; g < insLen; g++)
             {
                 debug.log("DEBUG","Adding: [%s] [%s]\n",CPS_TO_ADD[g].position,CPS_TO_ADD[g].name)
                 var propa = [];
@@ -113,9 +154,20 @@ CP_REMOVE_OK = {name:"CP_REMOVE_OK",value:false};
                 propa[0].name = CPS_TO_ADD[g].name;
                 propa[0].isRequired  = false;
                 propArr.splice(CPS_TO_ADD[g].position,0,propa[0]);
+            }//end for (var g = 0; g < insLen; g++)
+
+            //lastly, make sure we're not inserting a value that is already there
+            var arrToCheck = propArr.sort();
+            for (var d = 0; d < arrToCheck.length; d++)
+            {
+              if(arrToCheck[d+1].name == arrToCheck[d].name)
+              {
+                debug.log("ERROR","Attempted to insert same CP twice! CP: [%s].  Check config and rerun!\n",arrToCheck[d].name);
+                return false;
+              }
             }
 
-           if (!updateDoc(docType,propArr))
+            if (!updateDoc(docType,propArr))
             {
               debug.log("ERROR","Could not update doctype [%s]\n",docType.name);
               return false;
@@ -138,7 +190,7 @@ CP_REMOVE_OK = {name:"CP_REMOVE_OK",value:false};
               }
             }//end for (var l = 0; l < propArr.length; l++)
 
-           if (!updateDoc(docType,propArr))
+            if (!updateDoc(docType,propArr))
             {
               debug.log("ERROR","Could not update doctype [%s]\n",docType.name);
               return false;
