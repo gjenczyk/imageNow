@@ -16,19 +16,27 @@
 
 SELECT val1.doc_id, 
 val2.prop_name,
-val2.string_val
+val2.string_val,
+val1.string_val
 FROM 
 (SELECT INUSER.IN_DOC.DOC_ID,
-  INUSER.IN_DRAWER.DRAWER_NAME
+  INUSER.IN_DRAWER.DRAWER_NAME,
+  INUSER.IN_PROP.PROP_NAME,
+  INUSER.IN_INSTANCE_PROP.STRING_VAL
 FROM INUSER.IN_DOC
 INNER JOIN INUSER.IN_DRAWER
 ON INUSER.IN_DRAWER.DRAWER_ID = INUSER.IN_DOC.DRAWER_ID
 INNER JOIN INUSER.IN_INSTANCE
 ON INUSER.IN_DOC.INSTANCE_ID = INUSER.IN_INSTANCE.INSTANCE_ID
-WHERE INUSER.IN_DOC.DOC_ID  <> '321YYC6_062WSRGVE00001P'
-AND INUSER.IN_DRAWER.DRAWER_NAME LIKE 'UMBGA%'
-AND INUSER.IN_DOC.FOLDER = '01559762'
-AND INUSER.IN_INSTANCE.DELETION_STATUS <> 1) val1
+INNER JOIN INUSER.IN_INSTANCE_PROP
+ON INUSER.IN_INSTANCE.INSTANCE_ID = INUSER.IN_INSTANCE_PROP.INSTANCE_ID
+INNER JOIN INUSER.IN_PROP
+ON INUSER.IN_PROP.PROP_ID   = INUSER.IN_INSTANCE_PROP.PROP_ID
+WHERE INUSER.IN_DOC.DOC_ID <> '321YYC6_062WSRGVE00001P'
+AND INUSER.IN_DRAWER.DRAWER_NAME IN ('UMBGA','UMBGA Lockbox')
+AND INUSER.IN_DOC.FOLDER                = '01559762'
+AND INUSER.IN_INSTANCE.DELETION_STATUS <> 1
+AND PROP_NAME = 'SA Application Nbr') val1
 full outer JOIN 
 (SELECT INUSER.IN_DOC.DOC_ID,
 INUSER.IN_DRAWER.DRAWER_NAME,
@@ -78,6 +86,7 @@ var DOC_TYPE = "Relink Documents ";
 var ERR_QUEUE = " Relink Error"; 
 var COMPLETE_QUEUE = " Recycle Bin";
 var SHARED_Y_STRING = "301YT7N_000CFJ25Y0000NX";
+var UM = "UM";
 
 var WHITE_LIST = {
 
@@ -88,7 +97,7 @@ var WHITE_LIST = {
 };
 
 var SHARED_UPDATE_CPS = {"DOB", "SSN#, Legacy"};
-var SHARED_BLANK_CPS = {"Plan", "Plan Code"};
+var SHARED_BLANK_CPS = {"Plan", "Plan Code", "Program", "Program Code", "SA Application Nbr", "Sub-Plan", "Sub-Plan Code", "Term Code"};
 
 
 /**
@@ -107,22 +116,22 @@ function main ()
 
 			      if (!wfItem.getInfo())
 			      {
-				      debug.log("ERROR","Could not get info for wf ID: [%s]. Error: [%s]\n", currentWfItem.id, gettErrMsg());
+				      debug.log("ERROR","Could not get info for wf ID: [%s]. Error: [%s]\n", currentWfItem.id, getErrMsg());
 				      return false;
 			      }
 
             // extract campus name from current workflow queue
-			      var campus = wfItem.queueName.substring(0,3);
+			      var campus = wfItem.queueName.substring(2,5);
             // build trigger doc type name & determine error queue
             var relinkTrigger = DOC_TYPE + campus;
-            var errorQueue = campus + ERR_QUEUE;
+            var errorQueue = UM + campus + ERR_QUEUE;
             var triggerCreator = wfItem.creationUserName;
-            var recycleQueue = "UM" + campus + COMPLETE_QUEUE;
+            var recycleQueue = UM + campus + COMPLETE_QUEUE;
 
 			      var wfDoc = new INDocument(wfItem.objectId);
 			      if (!wfDoc.getInfo())
             {
-              debug.log("ERROR","Could not get info for doc ID: [%s]. Error: [%s]\n", wfDoc.name, gettErrMsg());
+              debug.log("ERROR","Could not get info for doc ID: [%s]. Error: [%s]\n", wfDoc.name, getErrMsg());
               RouteItem(wfItem.id, errorQueue, "Could not get doc Info!");
               return false;
             }
@@ -141,12 +150,17 @@ function main ()
 
             var driverCPs = new UnifiedPropertyManager();
             var custProps = driverCPs.GetAllCustomProps(wfDoc);
-            var driverPropArrray = []; 
+            var driverPropArrray = [];
+            var driverAppNumber; 
 
             for (cp = 0; cp<custProps.length; cp++)
             {
-              debug.log("INFO","Trigger CP Name/Value [%s] [%s]\n", custProps[cp].name, custProps[cp].getValue());
+              debug.log("DEBUG","Trigger CP Name/Value [%s] [%s]\n", custProps[cp].name, custProps[cp].getValue());
               driverPropArrray[cp] = new driverCustProp(custProps[cp].name, custProps[cp].getValue());
+              if(custProps[cp].name == "SA Application Nbr")
+              {
+                driverAppNumber = custProps[cp].getValue();
+              }
             } // end for (cp = 0; cp<custProps.length; cp++)
 
             // get the whitelist for the current campus
@@ -168,26 +182,49 @@ function main ()
             var driverField4 = wfDoc.field4;
             var driverId = wfDoc.id;
 
+            if (!driverField1 || driverField1 == null)
+            {
+              debug.log("ERROR","Driver document has missing value in Field1.\n");
+              RouteItem(wfItem.id, errorQueue, "Please update student ID");
+              return false;
+            }
+
             //printf("%s %s %s %s\n", driverField1, driverField2, driverField3, driverField4);
 
             //search for all documents matching the driver
             //sql
-            var sql = "SELECT val1.doc_id, " +
+            var sql = "SELECT val0.doc_id, " +
                       "val2.prop_name, " +
-                      "val2.string_val " +
-                      "  FROM " +
+                      "val2.string_val, " +
+                      "val1.string_val " +
+                      "FROM " +
+                      "(SELECT INUSER.IN_DOC.DOC_ID " + 
+                      " FROM INUSER.IN_DOC " + 
+                      " INNER JOIN INUSER.IN_DRAWER " + 
+                      " ON INUSER.IN_DRAWER.DRAWER_ID = INUSER.IN_DOC.DRAWER_ID " + 
+                      " INNER JOIN INUSER.IN_INSTANCE " + 
+                      " ON INUSER.IN_DOC.INSTANCE_ID = INUSER.IN_INSTANCE.INSTANCE_ID " +
+                      " WHERE INUSER.IN_DRAWER.DRAWER_NAME IN ('" + driverDrawer + "','" + driverDrawer + " Lockbox') " + 
+                      " AND INUSER.IN_INSTANCE.DELETION_STATUS <> 1 " +
+                      " AND INUSER.IN_DOC.DOC_ID<> '"+ driverId +"' " +           
+                      " AND INUSER.IN_DOC.FOLDER = '" + driverField1 + "') val0 " + 
+                      "LEFT JOIN " + 
                       "(SELECT INUSER.IN_DOC.DOC_ID, " +
-                      " INUSER.IN_DRAWER.DRAWER_NAME " +
+                      " INUSER.IN_DRAWER.DRAWER_NAME, " +
+                      " INUSER.IN_PROP.PROP_NAME, " +
+                      " INUSER.IN_INSTANCE_PROP.STRING_VAL " +
                       "FROM INUSER.IN_DOC " +
                       "INNER JOIN INUSER.IN_DRAWER " +
                       "ON INUSER.IN_DRAWER.DRAWER_ID = INUSER.IN_DOC.DRAWER_ID " +
                       "INNER JOIN INUSER.IN_INSTANCE " + 
                       "ON INUSER.IN_DOC.INSTANCE_ID = INUSER.IN_INSTANCE.INSTANCE_ID " +
-                      "WHERE INUSER.IN_DRAWER.DRAWER_NAME LIKE '" + driverDrawer + "%' " +
-                      "AND INUSER.IN_DOC.DOC_ID <> '"+ driverId +"'" + 
-                      "AND INUSER.IN_DOC.FOLDER = '" + driverField1 + "'" +
-                      "AND INUSER.IN_INSTANCE.DELETION_STATUS <> 1) val1 " +
-                      "full outer JOIN " +
+                      "INNER JOIN INUSER.IN_INSTANCE_PROP " +
+                      "ON INUSER.IN_INSTANCE.INSTANCE_ID = INUSER.IN_INSTANCE_PROP.INSTANCE_ID " +
+                      "INNER JOIN INUSER.IN_PROP " +
+                      "ON INUSER.IN_PROP.PROP_ID   = INUSER.IN_INSTANCE_PROP.PROP_ID " +
+                      "WHERE INUSER.IN_DOC.FOLDER = '" + driverField1 + "'" +
+                      "AND PROP_NAME = 'SA Application Nbr') val1 ON val0.doc_id = val1.doc_id " +
+                      "LEFT JOIN " +
                       "(SELECT INUSER.IN_DOC.DOC_ID, " +
                       "INUSER.IN_DRAWER.DRAWER_NAME, " +
                       "INUSER.IN_PROP.PROP_NAME, " +
@@ -204,7 +241,7 @@ function main ()
                       "WHERE INUSER.IN_DRAWER.DRAWER_NAME LIKE '" + driverDrawer + "%' " +
                       "AND INUSER.IN_DOC.FOLDER = '" + driverField1 + "' " +
                       "AND PROP_NAME = 'Shared') val2 " +
-                      "on val1.doc_id = val2.doc_id;" 
+                      "on val0.doc_id = val2.doc_id;"; 
 
             var returnVal;
             var cur = getHostDBLookupInfo_cur(sql,returnVal);
@@ -216,24 +253,56 @@ function main ()
               return false;
             } 
 
+            var docCount = 0;
+            var sharedCount = 0;
+            var updateCount = 0;
+
             while(cur.next())
             {     
+              docCount++;
               var relinkID = cur[0];
               var sharedProp = cur[1];
               var sharedVal = cur[2];
+              var targetAppNumber = cur[3];
 
               var docToUpdate = new INDocument(relinkID);
               if (!docToUpdate.getInfo())
               {
-                debug.log("ERROR","Could not get info for doc ID: [%s]. Error: [%s]\n", docToUpdate.name, gettErrMsg());
+                debug.log("ERROR","Could not get info for doc ID: [%s]. Error: [%s]\n", docToUpdate.name, getErrMsg());
                 ERROR_FLAG = true;
                 continue;
               }
               //printf("[%s] [%s] [%s]\n", relinkID, sharedProp, sharedVal);
 
+              // account for items that are currently ope in workflow
+              var wfStatus = docToUpdate.getWfInfo();
+              if (!wfStatus || wfStatus == null)
+              {
+                debug.log("ERROR","Couldn't get WFInfo for %s.  Error: %s\n", docToUpdate.id, getErrMsg());
+                return false;
+              } 
+
+              if(wfStatus.length > 0)
+              {
+                var wfToCheck = new INWfItem(wfStatus[0].id);
+                if (wfToCheck.state == 2)  
+                {
+                  debug.log("ERROR","Item [%s]is currently being processed in workflow.  Cannot relink. [%s]\n", docToUpdate.id, wfToCheck.state);
+                  ERROR_FLAG = true;
+                  continue;
+                }
+              }
+
               if ((!sharedProp || !sharedVal) && docToUpdate.field4.toUpperCase() != "SHARED")
               {
                 
+                //don't process if the app #'s don't match
+                if (driverAppNumber != targetAppNumber)
+                {
+                  debug.log("INFO","Not processing [%s] because SA Application Nbrs don't match: D:[%s]T:[%s]\n", relinkID, driverAppNumber, targetAppNumber);
+                  continue;
+                }
+
                 var targetDrawer = docToUpdate.drawer;
                 var targetField1 = docToUpdate.field1;
                 var targetField2 = docToUpdate.field2;
@@ -242,7 +311,7 @@ function main ()
                 var targetField5 = docToUpdate.field5;
                 var targetType = docToUpdate.docTypeName;
 
-                var keys = new INKeys(targetDrawer, driverField1, driverField2, driverField3, driverField4, targetField5, targetType, "WithCustProps");
+                var keys = new INKeys(targetDrawer, driverField1, driverField2, driverField3, driverField4, targetField5, targetType);
                 //printf("%s\n", keys.toString());
 
                 var targetCPName;
@@ -287,15 +356,16 @@ function main ()
               else if ((sharedProp && sharedVal) ||  (docToUpdate.field4.toUpperCase() == "SHARED"))
               {
 
+                sharedCount++;
                 var targetDrawer = docToUpdate.drawer;
                 var targetField1 = docToUpdate.field1;
                 var targetField2 = docToUpdate.field2;
-                var targetField3 = docToUpdate.field3;
+                var targetField3 = "";
                 var targetField4 = "Shared";
                 var targetField5 = docToUpdate.field5;
                 var targetType = docToUpdate.docTypeName;
 
-                var keys = new INKeys(targetDrawer, driverField1, driverField2, driverField3, targetField4, targetField5, targetType, "WithCustProps");
+                var keys = new INKeys(targetDrawer, driverField1, driverField2, targetField3, targetField4, targetField5, targetType);
                 //printf("%s\n", keys.toString());
 
                 var targetCPName;
@@ -367,7 +437,7 @@ function main ()
                 }
                 else
                 {
-                  debug.log("INFO","Index values been updated for [%s]\n", relinkID);
+                  debug.log("INFO","Index values been updated for [%s] [%s]\n", relinkID, keys);
                 }
 
                 if (!writeToWFHistory(docToUpdate, triggerCreator))
@@ -375,13 +445,18 @@ function main ()
                   ERROR_FLAG = true;
                 }
 
-            } // end while(Cur.next())
+                if(!ERROR_FLAG)
+                {
+                  updateCount++;
+                }
 
+            } // end while(Cur.next())
+            debug.log("DEBUG","Evaluated [%s] documents ([%s] shared) and updated [%s] belonging to [%s]\n",docCount,sharedCount,updateCount,driverField1);
             //clean up the driver now that we're done relinking (maybe?)
-            if (ERROR_FLAG) // if relinking fails, add note to driver and route to error queue?
+            if (ERROR_FLAG) // if relinking fails, add note to driver and route to error queue
             {
-              debug.log("ERROR","The script encountered errors in relinking.  Routing [%s] to [&s]\n", wfItem.id, errorQueue);
-              RouteItem(wfItem.id, errorQueue, "Unable to relink some documents.  Please check logs.");
+              debug.log("ERROR","The script encountered errors in relinking.  Routing [%s] to [%s]\n", wfItem.id, errorQueue);
+              RouteItem(wfItem.id, errorQueue, "Unable to relink document(s).  Please check GA_RelinkDocuments log.");
             }
             else
             {
@@ -442,29 +517,43 @@ function writeToWFHistory (targetDoc, creator)
   {
     debug.log("ERROR","Couldn't get WFInfo for %s.  Error: %s\n", targetDoc.id, getErrMsg());
     return false;
-  } // end writeToWFHistory
+  } 
 
-  var itemToNote = new INWfItem(itemWFInfo[0].id);
-
-  if (!itemToNote.getInfo())
+  if (itemWFInfo.length < 1) // add relinking info to notes field for docs not in WF
   {
-    debug.log("ERROR","Failed to get item. Error: %s.\n", getErrMsg());
-    return false;
-  }
+    debug.log("INFO","No workflow history exists to write to for [%s].  Writing to notes.\n", targetDoc.id);
+    var notes = targetDoc.getNotes();
+    var curTime = new Date();
+    notes += "\n"+ curTime +" This item was relinked via iScript by " + creator;
 
-  if (itemToNote.state == 2)  //GJ - is this step necessary?
-  {
-    debug.log("ERROR","Item [%s]is currently being processed in workflow.  Cannot relink. [%s]\n", targetDoc.id, itemToNote.state);
-    return false;
-  }
+    targetDoc.setNotes(notes);
 
-  if (!itemToNote.setState(WfItemState.Idle, "This item was relinked via iScript by " + creator))
-  {
-    debug.log("ERROR","Could not set state: %s.\n", getErrMsg());
-    return false;
+    return true;
   }
+  else
+  {
+    var itemToNote = new INWfItem(itemWFInfo[0].id);
+
+    if (!itemToNote.getInfo())
+    {
+      debug.log("ERROR","Failed to get item. Error: %s.\n", getErrMsg());
+      return false;
+    }
+
+    if (itemToNote.state == 2)  //GJ - is this step necessary?
+    {
+      debug.log("ERROR","Item [%s]is currently being processed in workflow.  Cannot relink. [%s]\n", targetDoc.id, itemToNote.state);
+      return false;
+    }
+
+    if (!itemToNote.setState(WfItemState.Idle, "This item was relinked via iScript by " + creator))
+    {
+      debug.log("ERROR","Could not set state: %s.\n", getErrMsg());
+      return false;
+    }
 
   return true;
+  }
 } // end writeToWFHistory
 
 function include(arr, obj) {
