@@ -126,6 +126,8 @@ function main ()
             var relinkTrigger = DOC_TYPE + campus;
             var errorQueue = UM + campus + ERR_QUEUE;
             var triggerCreator = wfItem.creationUserName;
+            var otherThing = wfItem.stateUserName;
+            debug.log("DEBUG","stateUserName = [%s]\n", otherThing);
             var recycleQueue = UM + campus + COMPLETE_QUEUE;
 
 			      var wfDoc = new INDocument(wfItem.objectId);

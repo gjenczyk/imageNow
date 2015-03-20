@@ -22,6 +22,7 @@
 //#link "secomobj" //COM object
 #include "$IMAGENOWDIR6$\\script\\lib\\iScriptDebug.jsh"
 #include "$IMAGENOWDIR6$\\script\\lib\\HostDBLookupInfo.jsh"
+#include "$IMAGENOWDIR6$\\script\\lib\\yaml_loader.jsh"
 
 // *********************         Configuration        *******************
 
@@ -36,12 +37,10 @@
 
 // ********************* Initialize global variables ********************
 
-DOCTYPES_TO_UPDATE = ["test"]; //all doctypes to work
-CPS_TO_ADD = [{name:"Alias",position:2},{name:"Alias 1",position:"gorble"},{name:"Alias 3"},{name:"Alias 2",position:4},{name:"DOB",position:"5"},{name:"CEEB",position:"5"}]; //all CPs to add. position = element # in array
-CPS_TO_REMOVE = [{name:""}]; //all CPs to remove
-DOCTYPE_OK = {name:"DOCTYPE_OK",value:false};
+DOCTYPE_OK = {name:"DOCTYPE_OK",value:false,create:false};
 CP_ADD_OK = {name:"CP_ADD_OK",value:false};
 CP_REMOVE_OK = {name:"CP_REMOVE_OK",value:false};
+FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
 
 /**
 * Main body of script.
@@ -55,149 +54,196 @@ CP_REMOVE_OK = {name:"CP_REMOVE_OK",value:false};
       debug = new iScriptDebug("updateDoctypeProps", LOG_TO_FILE, DEBUG_LEVEL);
       debug.log("WARNING", "updateDoctypeProps script started.\n");
 
-      //check the configuration for validity.  Don't do anything if the configured information is invalid
-      if (!checkConfig())
-      {
-        debug.log("ERROR","One or more configured items are not valid.\n");
-        return false;
-      }// end if (!checkCPConfig())
+      //load the yaml with doc config information
+      debug.log("INFO","Attempting to load YAML\n");
+      loadYAMLConfig(imagenowDir6+"\\script\\config_scripts\\updateDoctypeProps\\");
 
-      debug.log("DEBUG","CP_ADD_OK is [%s] and CP_REMOVE_OK [%s] and DOCTYPE_OK is [%s]\n", CP_ADD_OK.value, CP_REMOVE_OK.value, DOCTYPE_OK.value);
+      for (var docTypeConfig in CFG.updateDoctypeProps)
+      { 
+        debug.log("DEBUG","Begin processing UDTP configuration\n");
+        var UDTP_CONFIG = CFG.updateDoctypeProps[docTypeConfig].DOCTYPE_CONFIG;
 
-      if((!CP_ADD_OK.value && !CP_REMOVE_OK.value)|| !DOCTYPE_OK.value)
-      {
-        debug.log("ERROR","There is nothing to update!\n");
-        return false;
-      }
-
-      //If we're adding or removing
-      if ((CP_ADD_OK.value || CP_REMOVE_OK.value) && DOCTYPE_OK.value)
-      {
-        for (var i = 0; i < DOCTYPES_TO_UPDATE.length; i ++)
+        debug.log("DEBUG","Doctypes in YAML File [%s]\n",UDTP_CONFIG.length);
+        //update each doctype passed
+        for(var i=0; i<UDTP_CONFIG.length; i++)
         {
-          debug.log("INFO","Working the [%s] doctype.\n",DOCTYPES_TO_UPDATE[i]);
-          //get info aobut the doctype
-          var docTypeName = DOCTYPES_TO_UPDATE[i];
-          var docType = new INDocType();
-          var propArr = [];
-          docType.name = docTypeName;
-          if (docType.getInfo())
+          //reset flags to false
+          resetFlags();
+
+          //values from the yaml
+          var workingDocType = UDTP_CONFIG[i].DOC_INFO;
+          workingDocType = workingDocType[0];
+          var cpsToAdd = UDTP_CONFIG[i].CPS_TO_ADD;
+          var cpsToRemove = UDTP_CONFIG[i].CPS_TO_REMOVE;
+
+          var yamlArr = [workingDocType, cpsToAdd, cpsToRemove];
+
+          for (var d = 0; d < yamlArr.length; d++)
           {
-            debug.log("DEBUG","Doctype id:%s, name:%s, desc:%s, isActive:%s\n", docType.id, docType.name, docType.desc, docType.isActive);
-            var props = docType.props;
-            debug.log("DEBUG","Number of custom properties: %d\n",props.length);
-            for (i=0; i<props.length; i++)
+            if(!yamlArr[d])
             {
-                debug.log("INFO","EXISTING DOCTYPE PROPS: id:%s, name:%s, isRequired:%s \n",props[i].id, props[i].name, props[i].isRequired);
-                propArr.push(props[i]);
-            }//end for (i=0; i<props.length; i++)
+              yamlArr[d] == null;
+            }
           }
-          else
+
+          debug.log("DEBUG","UDTP_CONFIG Config: DOCTYPE_TO_UPDATE[%s], DOCTYPE_CREATE[%s], DOCTYPE_LIST[%s], CPS_TO_ADD[%s], CPS_TO_REMOVE[%s]\n",workingDocType.name, workingDocType.create, workingDocType.list, cpsToAdd, cpsToRemove);
+
+          //check the configuration for validity.  Don't do anything if the configured information is invalid
+          if (!checkConfig(workingDocType, cpsToAdd, cpsToRemove))
           {
-            //create it here if we want to do that?
-            debug.log("ERROR","Failed to retrieve info for document type - Error: %s\n.", getErrMsg());
+            debug.log("ERROR","One or more configured items are not valid.\n");
             return false;
-          }//end if (docType.getInfo()) else
+          }// end if (!checkCPConfig())
 
+          debug.log("DEBUG","CP_ADD_OK is [%s] and CP_REMOVE_OK [%s] and DOCTYPE_OK is [%s]\n", CP_ADD_OK.value, CP_REMOVE_OK.value, DOCTYPE_OK.value);
 
-
-          //if adding values
-          if(CP_ADD_OK.value)
+          if((!CP_ADD_OK.value && !CP_REMOVE_OK.value)|| !DOCTYPE_OK.value)
           {
-            debug.log("INFO","Adding CPs to [%s]\n",docType.name);
-              
-            //get the number of props to be inserted, sort them, and increment the postion appropriately.  
-            //verify that we have a valid positional parameter.  If not, insert it at the end of the list.
-            var propLen = propArr.length;
-            var insLen = CPS_TO_ADD.length;
-            var posMod = 0;
-
-            for (var f = 0; f < insLen; f++)
+            debug.log("ERROR","There is nothing to update!\n");
+            return false;
+          }
+          //If we're adding or removing
+          if ((CP_ADD_OK.value || CP_REMOVE_OK.value) && DOCTYPE_OK.value)
+          {
+            debug.log("INFO","Working the [%s] doctype.\n",workingDocType.name);
+            //get info aobut the doctype
+            var docType = new INDocType();
+            var propArr = [];
+            docType.name = workingDocType.name;
+            if (docType.getInfo())
             {
-              //set position if we have a bad value.
-              if(!parseInt(CPS_TO_ADD[f].position) || !CPS_TO_ADD[f].position || CPS_TO_ADD[f].position == null)
+              debug.log("DEBUG","Doctype id:%s, name:%s, desc:%s, isActive:%s\n", docType.id, docType.name, docType.desc, docType.isActive);
+              var props = docType.props;
+              debug.log("DEBUG","Number of custom properties: %d\n",props.length);
+              for (b=0; b<props.length; b++)
               {
-                debug.log("WARNING","Passed bad value for position: [%s] position: [%s]\n",CPS_TO_ADD[f].name, CPS_TO_ADD[f].position);
-                CPS_TO_ADD[f].position = propLen + posMod;
-                debug.log("INFO","New position for [%s] is [%s]\n",CPS_TO_ADD[f].name, CPS_TO_ADD[f].position);
-                posMod++;
-              }
-              //catch it if people enter int as a string
-              if (typeof CPS_TO_ADD[f].position == "string")
-              {
-                 CPS_TO_ADD[f].position = Number(CPS_TO_ADD[f].position);
-              }
-            }//end for (var f = 0; f < insLen; f++)
-
-            //now that that's done, sort CPS_TO_ADD by position and increment values so they go where you want them to!
-            CPS_TO_ADD.sort(function(a, b){return a.position-b.position});
-
-            //now, adjust postion so props go where you want them to
-            for (var e = 0; e < insLen; e++)
+                debug.log("INFO","EXISTING DOCTYPE PROPS: id:%s, name:%s, isRequired:%s \n",props[b].id, props[b].name, props[b].isRequired);
+                propArr.push(props[b]);
+              }//end for (b=0; b<props.length; b++)
+            }
+            else
             {
-              if (CPS_TO_ADD[e].position <= propLen)
-              {
-                CPS_TO_ADD[e].position +=e;
-              }
-              else
-              {
-                CPS_TO_ADD[e].position = propLen + e;
-              }
-            }//end for (var e = 0; e < insLen; e++)
+              //create it here if we want to do that?
+              debug.log("ERROR","Failed to retrieve info for document type - Error: [%s]\n", getErrMsg());
+              return false;
+            }//end if (docType.getInfo()) else
 
-            //insert the values in the array
-            for (var g = 0; g < insLen; g++)
+              //add document type to list if the list is set
+              if(workingDocType.list)
+              {
+                debug.log("DEBUG","Attempting to add [%s] to [%s]\n",workingDocType.name, workingDocType.list);
+                if(!addToList(workingDocType))
+                {
+                  debug.log("ERROR","Could not add [%s] to [%s]. Check config and rerun!\n",workingDocType.name, workingDocType.list);
+                  return false;
+                }
+                else
+                {
+                  debug.log("INFO","Added [%s] to [%s]\n",workingDocType.name, workingDocType.list);
+                }
+              }//end adding to list
+
+            //if adding values
+            if(CP_ADD_OK.value)
             {
-                debug.log("DEBUG","Adding: [%s] [%s]\n",CPS_TO_ADD[g].position,CPS_TO_ADD[g].name)
+              debug.log("INFO","Adding CPs to [%s]\n",docType.name);
+
+              //get the number of props to be inserted, sort them, and increment the postion appropriately.  
+              //verify that we have a valid positional parameter.  If not, insert it at the end of the list.
+              var propLen = propArr.length;
+              var insLen = cpsToAdd.length;
+              var posMod = 0;
+
+              for (var f = 0; f < insLen; f++)
+              {
+                //set position if we have a bad value.
+                if(!parseInt(cpsToAdd[f].position) || !cpsToAdd[f].position || cpsToAdd[f].position == null)
+                {
+                  debug.log("WARNING","Passed bad value for position: [%s] position: [%s]\n",cpsToAdd[f].name, cpsToAdd[f].position);
+                  cpsToAdd[f].position = propLen + posMod;
+                  debug.log("INFO","New position for [%s] is [%s]\n",cpsToAdd[f].name, cpsToAdd[f].position);
+                  posMod++;
+                }
+                //catch it if people enter int as a string
+                if (typeof cpsToAdd[f].position == "string")
+                {
+                 cpsToAdd[f].position = Number(cpsToAdd[f].position);
+                }
+              }//end for (var f = 0; f < insLen; f++)
+
+              //now that that's done, sort cpsToAdd by position and increment values so they go where you want them to!
+              cpsToAdd.sort(function(a, b){return a.position-b.position});
+
+              //now, adjust postion so props go where you want them to
+              for (var e = 0; e < insLen; e++)
+              {
+                if (cpsToAdd[e].position <= propLen)
+                {
+                  cpsToAdd[e].position +=e;
+                }
+                else
+                {
+                  cpsToAdd[e].position = propLen + e;
+                }
+              }//end for (var e = 0; e < insLen; e++)
+
+              //insert the values in the array
+              for (var g = 0; g < insLen; g++)
+              {
+                debug.log("DEBUG","Adding: [%s] [%s]\n",cpsToAdd[g].position,cpsToAdd[g].name)
                 var propa = [];
                 propa[0] = new INClassProp();
-                propa[0].name = CPS_TO_ADD[g].name;
+                propa[0].name = cpsToAdd[g].name;
                 propa[0].isRequired  = false;
-                propArr.splice(CPS_TO_ADD[g].position,0,propa[0]);
-            }//end for (var g = 0; g < insLen; g++)
+                propArr.splice(cpsToAdd[g].position,0,propa[0]);
+              }//end for (var g = 0; g < insLen; g++)
 
-            //lastly, make sure we're not inserting a value that is already there
-            var arrToCheck = propArr.sort();
-            for (var d = 0; d < arrToCheck.length; d++)
-            {
-              if(arrToCheck[d+1].name == arrToCheck[d].name)
+              //lastly, make sure we're not inserting a value that is already there
+              var arrToCheck = propArr.sort();
+              var dupCheck = arrToCheck.length;
+
+              while(dupCheck > 1)
               {
-                debug.log("ERROR","Attempted to insert same CP twice! CP: [%s].  Check config and rerun!\n",arrToCheck[d].name);
+                dupCheck--;
+                if(arrToCheck[dupCheck].name == arrToCheck[dupCheck-1].name)
+                {
+                  debug.log("ERROR","Attempted to insert same CP twice! CP: [%s].  Check config and rerun!\n",arrToCheck[dupCheck].name);
+                  return false;
+                }
+              } //end while(dupCheck > 1)
+
+              if (!updateDoc(docType,propArr))
+              {
+                debug.log("ERROR","Could not update doctype [%s]\n",docType.name);
                 return false;
               }
-            }
 
-            if (!updateDoc(docType,propArr))
+            }//end if adding values
+
+            //if removing values
+            if(CP_REMOVE_OK.value)
             {
-              debug.log("ERROR","Could not update doctype [%s]\n",docType.name);
-              return false;
-            }
-
-          }//end if adding values
-
-          //if removing values
-          if(CP_REMOVE_OK.value)
-          {
-            debug.log("INFO","Removing CPs from [%s]\n",docType.name);
-            for (var l = 0; l < propArr.length; l++)
-            {
-              for (var m = 0; m < CPS_TO_REMOVE.length; m++)
+              debug.log("INFO","Removing CPs from [%s]\n",docType.name);
+              for (var l = 0; l < propArr.length; l++)
               {
-                if(propArr[l].name == CPS_TO_REMOVE[m].name)
+                for (var m = 0; m < cpsToRemove.length; m++)
                 {
-                  propArr.splice(l,1);
+                  if(propArr[l].name == cpsToRemove[m].name)
+                  {
+                    propArr.splice(l,1);
+                  }
                 }
-              }
-            }//end for (var l = 0; l < propArr.length; l++)
+              }//end for (var l = 0; l < propArr.length; l++)
 
-            if (!updateDoc(docType,propArr))
-            {
-              debug.log("ERROR","Could not update doctype [%s]\n",docType.name);
-              return false;
-            }
-          }//end if removing values
-        }//end of for (var i = 0; i < DOCTYPES_TO_UPDATE.length; i ++)
-      }//if (CP_ADD_OK || CP_REMOVE_OK) 
+              if (!updateDoc(docType,propArr))
+              {
+                debug.log("ERROR","Could not update doctype [%s]\n",docType.name);
+                return false;
+              }
+            }//end if removing values
+          }//if (CP_ADD_OK || CP_REMOVE_OK) 
+        }//update each doctype passed
+      }//end for (var docTypeConfig in CFG.updateDoctypeProps)
     }// end try
         
     catch(e)
@@ -237,7 +283,7 @@ CP_REMOVE_OK = {name:"CP_REMOVE_OK",value:false};
 
 // ********************* Function Definitions **********************************
 //function that checks to see if the values in the CP config actually exist
-function checkConfig()
+function checkConfig(docType,addCusProps,remCusProps)
 {
   // working with some global vars here
   debug.log("INFO","Checking to see if provided configuration is valid.\n");
@@ -260,15 +306,15 @@ function checkConfig()
   }
 
   //check the cps to add
-  var cpAdd = checkCPs(allProps,CPS_TO_ADD,CP_ADD_OK);
+  var cpAdd = checkCPs(allProps,addCusProps,CP_ADD_OK);
   //end check the cps to add
   
   //check the cps to remove
-  var cpRem = checkCPs(allProps,CPS_TO_REMOVE,CP_REMOVE_OK);
+  var cpRem = checkCPs(allProps,remCusProps,CP_REMOVE_OK);
   //end check the cps to remove
 
   //check the document types
-  var dtToWork = checkDocTypes(DOCTYPES_TO_UPDATE, DOCTYPE_OK);
+  var dtToWork = checkDocTypes(docType, DOCTYPE_OK);
   //end check the document types
 
   //return true if it all is OK to proceed
@@ -286,9 +332,9 @@ function checkConfig()
 function arrCheck(arr, item)
 {
   var success = false;
-  for (var i = 0; i < arr.length; i++)
+  for (var c = 0; c < arr.length; c++)
   {
-    if (item == arr[i])
+    if (item == arr[c])
     {
       success = true;
     }
@@ -299,9 +345,16 @@ function arrCheck(arr, item)
 //function to check if CPs exist
 function checkCPs(allCpArr, workCpArr, cpFlag)
 {
+  if(workCpArr == null || !workCpArr)
+  {
+    debug.log("WARNING","No CP config was available to check. [%s] is false, not changing CPs.\n",cpFlag.name);
+    cpFlag.value = false;
+    return true;
+  }
+
   for(var j = 0; j < workCpArr.length; j++)
   {
-    if (workCpArr[j].name == "")
+    if (workCpArr[j].name == "" || workCpArr[j].name == null)
     {
       debug.log("WARNING","No value was passed for item [%s] in config.  Not changing any CPs.\n",j)
       cpFlag.value = false;
@@ -326,15 +379,28 @@ function checkCPs(allCpArr, workCpArr, cpFlag)
 //function to verify doctypes exist
 function checkDocTypes(dtArr, dtFlag)
 {
-  for (var k = 0; k < dtArr.length; k++)
-  {
-    var curDT = INDocType.get(dtArr[k]);
-    if(!curDT || curDT == null)
+  var curDT = INDocType.get(dtArr.name);
+  if(!curDT || curDT == null)
+  {   
+    if (dtArr.create)
     {
-      debug.log("ERROR","Couldn't get info for [%s] - [%s]\n", dtArr[k], getErrMsg());
+      if(!createDocType(dtArr))
+      {
+        debug.log("ERROR","Could not create docType [%s]\n",dtArr.name);
+        return false;    
+      }
+      else
+      {
+        dtFlag.create = true;
+      }
+    }
+    else
+    {
+      debug.log("ERROR","Couldn't get info for [%s] - [%s]\n", dtArr.name, getErrMsg());
       return false;
     }
   }
+
   dtFlag.value = true;
   debug.log("INFO","Setting [%s] to [%s].\n",dtFlag.name, dtFlag.value);
   return true;
@@ -343,9 +409,9 @@ function checkDocTypes(dtArr, dtFlag)
 //function to update doctype
 function updateDoc(docType1, propArr1)
 {
-  for (i=0; i<propArr1.length; i++)
+  for (m=0; m<propArr1.length; m++)
   {
-    debug.log("DEBUG","NEW DOCTYPE PROPS: id:%s, name:%s, isRequired:%s \n",propArr1[i].id, propArr1[i].name, propArr1[i].isRequired);
+    debug.log("DEBUG","NEW DOCTYPE PROPS: id:%s, name:%s, isRequired:%s \n",propArr1[m].id, propArr1[m].name, propArr1[m].isRequired);
   }
 
   if(docType1.update(docType1.name, docType1.desc, docType1.isActive, 0, propArr1))
@@ -358,6 +424,68 @@ function updateDoc(docType1, propArr1)
     return false;
   }
   return true;
-}
+} //end function to update doctype
+
+//function to make sure flags are false for a new document type
+function resetFlags () {
+// is this crazy?
+  for (var flag in FLAGS)
+  {
+    for (var subFlag in FLAGS[flag])
+    {
+      if(FLAGS[flag][subFlag] == true)
+      {
+        FLAGS[flag][subFlag] = false;
+      }
+    }
+  }
+}//end function to make sure flags are false for a new document type
+
+//function to create a doctype
+function createDocType(makeDoc)
+{
+  var newDocType = INDocType.add(makeDoc.name);
+  if(!newDocType || newDocType == null)
+  {
+    debug.log("ERROR","Error creating newDocType [%s] [%s]\n",makeDoc.name, getErrMsg());
+    return false;
+  }
+  else
+  {
+    return true;
+  }
+}//end function to create a doctype
+
+//function to add a doctype to a list
+function addToList(dtInfo)
+{
+  var addList = new INDocTypeList("",dtInfo.list)
+  var targetList = addList.getInfo();
+  if(!targetList || targetList == null)
+  {
+    debug.log("ERROR","DocTypeList [%s] doesn't exist!!\n",dtInfo.list);
+    return false;
+  }
+  else
+  {
+    debug.log("INFO","DocTypeList [%s] exists! Attempting to add [%s]\n",dtInfo.list, dtInfo.name);
+    var typeToAdd = new INDocType();
+    typeToAdd.name = dtInfo.name;
+    var addedType = typeToAdd.getInfo();
+
+    if (!addedType || addedType == null)
+    {
+      debug.log("ERROR","Couldn't find [%s]\n",dtInfo.name);
+      return false;
+    }
+    
+    if(!addList.updateMembers(typeToAdd.id))
+    {
+      debug.log("ERROR","Couldn't update doctype list [%s] - [%s]\n", addList.name, getErrMsg());
+      return false;
+    }
+  }
+  return true;
+}//end function to add a doctype to a list
 
 //

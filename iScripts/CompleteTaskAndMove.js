@@ -122,7 +122,7 @@ function processByQueue()
 
                 var queueStartTime = new Date(1970, 1, 1);
 
-                var wfItems = wfQueue.getItemList(WfItemState.Any, WfItemQueryDirection.AfterTimestamp, 5000, queueStartTime);
+                var wfItems = wfQueue.getItemList(WfItemState.Any, WfItemQueryDirection.AfterTimestamp, 1000, queueStartTime);
 
                 if (wfItems == null || !wfItems)
                 {
@@ -200,7 +200,7 @@ function processByQueue()
                     debug.log("ERROR","Could not retrieve workflow info for folder ID [%s]: [%s]\n", folder.id, getErrMsg());
                     continue;
                   }              
-              
+                  debug.log("DEBUG","Working folder: [%s]\n",folder.id);
                   var taskList = new Array();
                   if(!INTask.getTasks(folder.id,"","",taskList))
                   {
@@ -311,6 +311,14 @@ function processByCSV()
     workingCsv = csvResult[0].name;
   }  // end of csvResult != null
 
+  var csvLineCount = countLines(workingCsv);
+
+  if (!csvLineCount || csvLineCount == null)
+  {
+    debug.log("ERROR","Couldn't get the number of rows in [%s].\n",workingCsv);
+    return false;
+  }
+
   //open & read & close csv
   var fp = Clib.fopen(workingCsv, "r");
   if ( fp == null )
@@ -322,11 +330,17 @@ function processByCSV()
    //for each row in the csv
    while ( null != (line=Clib.fgets(fp)) )
    {     
+      var curLineNum = csvLineCount;
       columns = line.replace(/\r?\n|\r/,'').split(",");
       if(columns.length != 5)
       {
         debug.log("ERROR","Line has incorrect number [%s] of columns: [%s]\n", columns.length, line);
+        csvLineCount--;
         continue;
+      }
+      else
+      {
+        csvLineCount--;
       }
 
       var emplid = columns[0];
@@ -336,7 +350,7 @@ function processByCSV()
       var desQueue = columns[4];
       var csvCampus = tskTemp.substr(tskTemp.length - 3);
 
-      debug.log("INFO","emplid[%s],appNo[%s],tskTemp[%s],tskRsn[%s],desQueue[%s],campus[%s]\n", emplid, appNo , tskTemp , tskRsn , desQueue, csvCampus);
+      debug.log("INFO","[%s]emplid[%s],appNo[%s],tskTemp[%s],tskRsn[%s],desQueue[%s],campus[%s]\n", curLineNum, emplid, appNo , tskTemp , tskRsn , desQueue, csvCampus);
 
       
 
@@ -394,7 +408,7 @@ function processByCSV()
 
       if (!csvReasonExists)
       {
-        debug.log("ERROR","Could not find the task reason [%s] in [%s]\n", tsk, csvTemplate.name);
+        debug.log("ERROR","Could not find the task reason [%s] in [%s]\n", csvTskRsn, csvTemplate.name);
         continue;
       }
 
@@ -430,77 +444,114 @@ function processByCSV()
       else
       {
         var readyToRoute = false;
+        var useThisTask = {id:"",taskTemplateID:"",creationTime:0};
+        var foundTask = false;
 
-        for(var l=0; l<csvTaskList.length; l++)
+        //sort by assigned time?
+        for (var m = 0; m<csvTaskList.length; m++)
+        {
+          if((csvTaskList[m].taskTemplateID == csvTargetTemplate) && (csvTaskList[m].state == "Assigned"))
           {
-            if (csvTargetTemplate == csvTaskList[l].taskTemplateID)
+            if(csvTaskList[m].creationTime > useThisTask.creationTime)
             {
-              var thisTask = new INTask(csvTaskList[l].taskTemplateID, csvTaskList[l].id);
-
-              if (!thisTask.getInfo())
-              {
-                debug.log("ERROR", "Could not get info for task [%s]: [%s]\n", csvTaskList[l].id, getErrMsg());
-                continue;
-              }
-
-              if (thisTask.state == "Assigned")
-              {
-                var taskToWork;
-                if(!(taskToWork = INTask.workByID(thisTask.id)))
-                {
-                  debug.log("ERROR","Unable to get task [%s] for processing: [%s]\n", thisTask.id, getErrMsg());
-                  continue;
-                }
-                else
-                {
-                  debug.log("INFO","Working task [%s] for [%s]\n", thisTask.id, folder.id);
-
-                  if(!thisTask.complete(csvtaskCmpltnReason))
-                  {
-                    debug.log("ERROR","Could not complete task for [%s]: [%s]\n", folder.id, getErrMsg());
-                    continue;
-                  }
-                  else
-                  {
-                    if(!thisTask.addComment("Task completed by CompleteTaskAndMove.js: " + csvTextTaskCmpltnReason))
-                    {
-                      debug.log("ERROR", "Could not add comment to task with completion: [%s]\n", getErrMsg());
-                    }
-
-                    printf("ID: [%s] - Completed [%s] with a reason of [%s]\n", folder.id, thisTask.id, csvTextTaskCmpltnReason);
-                    debug.log("INFO","ID: [%s] - Completed [%s] with a reason of [%s]\n", folder.id, thisTask.id, csvTextTaskCmpltnReason);
-                    readyToRoute = true;
-                    //break to only complete one task if there are multiple!
-                    break;
-                  }
-
-                }// end of working current assigned task
-
-              }// end of processing for assigned tasks
-
-            }// end of processing for target task template
-
-          }// end of for loop checking for target task template
-
-          if (readyToRoute)
-          {          
-            if(!RouteItem(wfFolder[0].id, desQueue, "CTaM: " + csvTextTaskCmpltnReason + " to " + desQueue))
-            {
-              debug.log("ERROR","Failed to route [%s]: [%s]\n", folder.id, getErrMsg());
-              continue;
+              useThisTask.id = csvTaskList[m].id;
+              useThisTask.taskTemplateID = csvTaskList[m].taskTemplateID;
+              useThisTask.creationTime = csvTaskList[m].creationTime;
+              foundTask = true;
             }
-            else
+          }
+        }
+
+        if(!foundTask)
+        {
+          debug.log("WARNING","No available tasks to complete for [%s]\n",folder.id);
+          continue;
+        }
+
+        var thisTask = new INTask(useThisTask.taskTemplateID, useThisTask.id);
+
+        if (!thisTask.getInfo())
+        {
+          debug.log("ERROR", "Could not get info for task [%s]: [%s]\n", csvTaskList[l].id, getErrMsg());
+          continue;
+        }
+
+        var taskToWork;
+        if(!(taskToWork = INTask.workByID(thisTask.id)))
+        {
+          debug.log("ERROR","Unable to get task [%s] for processing: [%s]\n", thisTask.id, getErrMsg());
+          continue;
+        }
+        else
+        {
+          debug.log("INFO","Working task [%s] for [%s]\n", thisTask.id, folder.id);
+
+          if(!thisTask.complete(csvtaskCmpltnReason))
+          {
+            debug.log("ERROR","Could not complete task for [%s]: [%s]\n", folder.id, getErrMsg());
+            continue;
+          }
+          else
+          {
+            if(!thisTask.addComment("Task completed by CompleteTaskAndMove.js: " + csvTextTaskCmpltnReason))
             {
-              debug.log("INFO","Successfully routed [%s] to [%s].\n", folder.id, desQueue);
+              debug.log("ERROR", "Could not add comment to task with completion: [%s]\n", getErrMsg());
             }
-          } // end of if ready to route
 
-        }// end of task processing for current folder
+            printf("[%s] ID: [%s] - Completed [%s] with a reason of [%s]\n", curLineNum, folder.id, thisTask.id, csvTextTaskCmpltnReason);
+            debug.log("INFO","[%s] ID: [%s] - Completed [%s] with a reason of [%s]\n", curLineNum, folder.id, thisTask.id, csvTextTaskCmpltnReason);
+            readyToRoute = true;
+          }
+        }// end of working current assigned task
 
+        if (readyToRoute)
+        {          
+          if(!wfFolder[0].id)
+          {
+            debug.log("ERROR","Failed to add [%s] to destination queue: [%s]\n", folder.id, getErrMsg());
+            continue;
+          }
+          if(!RouteItem(wfFolder[0].id, desQueue, "CTaM: " + csvTextTaskCmpltnReason + " to " + desQueue))
+          {
+            debug.log("ERROR","Failed to route [%s]: [%s]\n", folder.id, getErrMsg());
+            continue;
+          }
+          else
+          {
+            debug.log("INFO","Successfully routed [%s] to [%s].\n", folder.id, desQueue);
+          }
+        } // end of if ready to route
+        else
+        {
+          debug.log("WARNING", "[%s]  - [%s APP: %s] was not routed.\n", folder.id, emplid, appNo);
+        }
+      }// end of task processing for current folder
    } // ens of while
   Clib.fclose(fp);
 
 } // END OF PROCESS BY CSV
+
+//this funciton gets the number of lines in the csv
+function countLines(csvName)
+{
+  var lineNum = 0;
+  var lc = Clib.fopen(csvName, "r");
+  if ( lc == null )
+  {
+    debug.log("ERROR","Error opening [%s] for reading.\n",csvName);
+    Clib.fclose(lc);
+    return false;
+  }
+  else
+  {
+    while ( null != (line=Clib.fgets(lc)) )
+    {
+      lineNum++;
+    }
+  }
+  Clib.fclose(lc);
+  return lineNum;
+}//end countLines
 
 
 //
