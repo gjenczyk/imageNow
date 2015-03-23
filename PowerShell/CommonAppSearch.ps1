@@ -19,7 +19,7 @@
 ##############################################################################
 
 #-- INCLUDES --#
-. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
+. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
 
 #-- CONFIG --#
 
@@ -36,13 +36,13 @@ $scriptLog = "${root}inserver6\log\CommonAppSearch_${logDate}.log"
 "$(get-date) - Starting CommonAppSearch Script" | Out-File $runLog -Append
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
-D:\inserver6\bin64\intool1 --cmd run-iscript --file \\boisnas215c1.umasscs.net\diimages67tst\script\CommonAppSearch.js
+D:\inserver6\bin64\intool --cmd run-iscript --file \\ssisnas215c2.umasscs.net\diimages67prd\script\CommonAppSearch.js >> $runLog
 
 $sw.Stop()
 $totalRunTime = $sw.ElapsedMilliseconds/1000
 
 #
-if ($totalRunTime -lt 3){
+if ($totalRunTime -lt 2){
     if($(Get-Content $scriptLog | where { $_ -match "First row of cursor not found:"} | Measure-Object).count -eq 3){
     $message="There are currently no documents in the Common App Docs queues."
     } else {
@@ -50,16 +50,16 @@ if ($totalRunTime -lt 3){
     }
 } else {
  $numberMatch = $(Get-Content $scriptLog | where { $_ -match "Successfully reindexed"} | Measure-Object).count
- #$numAdjust = $(Get-Content $scriptLog | where { $_ -match "Common App Docs for matches"} | Measure-Object).count
  $docLines = $(Get-Content $scriptLog | where { $_ -match "document id:"} | Measure-Object).count
- #$totalDocs = $($docLines - $numAdjust)
+ #$totalDocs = $($docLines - 3)
  $message="The script finished running at $(get-date -Format 'h:mm \o\n dddd, MMMM dd').
- It took $('{0:N2}' -f $($totalRunTime/60)) minutes to make ${numberMatch} matches out of ${docLines} documents across all Common App queues."
+ It took $('{0:N2}' -f $($totalRunTime/60)) minutes to make ${numberMatch} matches out of ${docLines} documents across all Common App queues.
+ Average search time: $('{0:N2}' -f $($totalRunTime/($docLines))) seconds per document."
 }
 
-#sendmail -t gjenczyk@umassp.edu -s "[DI ${env} Notice] CommonAppSearch.ps1 has finished running" -m ${message}
+sendmail -t UITS.DI.CORE@umassp.edu -s "[DI ${env} Notice] CommonAppSearch.ps1 has finished running" -m ${message}
 
-Start-Sleep -s 1
+Start-Sleep -s 2
 Get-Item -path $scriptLog | Rename-Item -NewName {$_.Name -replace ".log","-$(Get-Date -format 'HHmm').log"}
 
 $error[0] | Out-File $runLog -Append

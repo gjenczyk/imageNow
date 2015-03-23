@@ -20,7 +20,7 @@
 # "$(Get-Date) " | Out-File -Append $runLog
 #############################################################################>
 
-. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
+. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
 
 $env = hostname
 $env = $env.ToUpper().substring(2,5)
@@ -31,9 +31,38 @@ $env = hostname
 $env = $env.ToUpper().substring(2,5)
 $serviceArray = @()
 $failureArray = @()
+$taskArray = @()
+$taskFailArray = @()
+$mailingList = @("gjenczyk@umassp.edu","cmatera@umassp.edu")
 $stoppedServices = $false
+$stoppedTasks = $false
 $failedServices = $false
+$failedTasks = $false
 $successMessage = $false
+
+Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Name -notmatch "ImageNow Se*"} | ForEach-Object {
+
+        if ($_.Status -eq 'Running')
+        {
+            Stop-Service $_.Name
+            if ($?)
+            {
+                $stoppedService = $_.Name
+                "Stopped $startedService at $(Get-Date)" | Out-File -Append -FilePath "d:\inserver6\log\INowServiceMonitor.log"
+                $serviceArray += "$stoppedService`n"
+                $stoppedServices = $true
+            }
+            else
+            {
+                $failedStop = $_.Name
+                "Failed to stop $failedStop at $(Get-Date)" | Out-File -Append -FilePath "d:\inserver6\log\INowServiceMonitor.log"
+                $failureArray += "$failedStop"
+                $stoppedServices = $true
+                $failedServices = $true
+            }
+        }
+    
+}
 
 Get-Service | Where-Object {$_.Name -match "ImageNow Se*"} | ForEach-Object {
 
@@ -59,32 +88,34 @@ Get-Service | Where-Object {$_.Name -match "ImageNow Se*"} | ForEach-Object {
     
 }
 
-Get-Service | Where-Object {$_.Name -match "ImageNow*"} | ForEach-Object {
-
-        if ($_.Status -eq 'Running')
+$tasks = & SCHTASKS /Query /V /FO CSV | ConvertFrom-Csv
+foreach ($task in $tasks)
+{
+    if($task.Author -match "UMASSP*")
+    {
+        $tony = $task.TaskName
+        & SCHTASKS /Change /DISABLE /TN "$tony"
+        if ($?)
         {
-            Stop-Service $_.Name
-            if ($?)
-            {
-                $stoppedService = $_.Name
-                "Stopped $startedService at $(Get-Date)" | Out-File -Append -FilePath "d:\inserver6\log\INowServiceMonitor.log"
-                $serviceArray += "$stoppedService`n"
-                $stoppedServices = $true
-            }
-            else
-            {
-                $failedStop = $_.Name
-                "Failed to stop $failedStop at $(Get-Date)" | Out-File -Append -FilePath "d:\inserver6\log\INowServiceMonitor.log"
-                $failureArray += "$failedStop"
-                $stoppedServices = $true
-                $failedServices = $true
-            }
+            "Stopped $tony at $(Get-Date)" | Out-File -Append -FilePath "d:\inserver6\log\INowServiceMonitor.log"
+            $taskArray += "$tony`n"
+            $stoppedTasks = $true
         }
-    
+        else
+        {
+            "Failed to stop $tony at $(Get-Date)" | Out-File -Append -FilePath "d:\inserver6\log\INowServiceMonitor.log"
+             $taskFailArray += "$tony`n"
+             $stoppedTasks = $true
+             $failedTasks = $true
+        }
+    }
 }
+
 
 if ($stoppedServices)
 {
+    $message ="";
+    
     if ($serviceArray.Length -gt 1)
     {
         $subject = "[DI $env Notice] Services have been stopped on $(hostname)"
@@ -97,7 +128,14 @@ if ($stoppedServices)
         $message = "The instance of $startedService on $(hostname) was successfully stopped."
         $successMessage = $true
     }
-
+    if($stoppedTasks)
+    {
+        $message += "`nThe following tasks were set to disabled: `n`n${taskArray}`n"
+        if($failedTasks)
+        {
+            $message += "`nThe following tasks could not be disabled: `n`n${taskFailArray}`n"
+        }
+    }
     if ($failedServices)
     {
         if ($failureArray -ne 0)
@@ -116,5 +154,5 @@ if ($stoppedServices)
         }
     }
 
-    sendmail -t gjenczyk@umassp.edu, cmatera@umassp.edu -s $subject -m $message
+    sendmail -t $mailingList -s $subject -m $message
 }

@@ -1,4 +1,4 @@
-<# #############################################################################
+# #############################################################################
 # NAME: GenericIntoolRunner.ps1
 # 
 # AUTHOR:  Gregg Jenczyk, UMass (UITS)
@@ -16,10 +16,10 @@
 # 
 # USEFUL SNIPPETS:
 # "$(Get-Date) " | Out-File -Append $runLog
-# #############################################################################>
+# #############################################################################
 
 #-- INCLUDES --#
-. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
+. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
 
 #-- CONFIG --#
 
@@ -28,21 +28,22 @@ $root = "\\boisnas215c1.umasscs.net\diimages67tst\"
 $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
 $logDate = $(get-date -format 'yyyyMMdd')
+$scriptName = "ScriptName" #change this here - no extension
 
 #- LOGGING -#
-$runLog = "${root}log\running_log-scriptName.log"
-$scriptLog = "${root}log\ScriptName_${logDate}.log"
+$runLog = "${root}log\running_log-${scriptName}.log"
+$scriptLog = "${root}log\${scriptName}_${logDate}.log"
 
 #-- MAIN --#
-"$(get-date) - Starting ScriptName Script" | Out-File $runLog -Append
+"$(get-date) - Starting ${scriptName} Script" | Out-File $runLog -Append
 
-D:\inserver6\bin64\intool --cmd run-iscript --file ${root}script\ScriptName.js
+D:\inserver6\bin64\intool --cmd run-iscript --file ${root}script\${scriptName}.js >> $runLog
 
 <#
 Use this if you want to be notified when the script finishes running
 
-sendmail -t "gjenczyk@umassp.edu" -s "[DI ${env} Notice] ScriptName.ps1 has finished running" -m ${message}
+sendmail -t "gjenczyk@umassp.edu" -s "[DI ${env} Notice] ${scriptName}.ps1 has finished running" -m ${message}
 #>
 
 $error[0] | Out-File $runLog -Append
-"$(get-date) - Finishing ScriptName Script" | Out-File $runLog -Append
+"$(get-date) - Finishing ${scriptName} Script" | Out-File $runLog -Append

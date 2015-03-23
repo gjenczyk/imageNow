@@ -18,24 +18,24 @@
 # #############################################################################>
 
 #-- INCLUDES --#
-. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
+. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
 
 #-- CONFIG --#
 
 $localRoot = "D:\"
-$root = "\\boisnas215c1.umasscs.net\diimages67tst\"
+$root = "\\ssisnas215c2.umasscs.net\diimages67prd\"
 $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
 $logDate = $(get-date -format 'yyyyMMdd')
 
 #- LOGGING -#
-$runLog = "${root}log\running_log-scriptName.log"
-$scriptLog = "${root}log\ScriptName_${logDate}.log"
+$runLog = "${root}log\running_log-SA_LoadMonitor.log"
+$scriptLog = "${root}log\SA_LoadMonitor_${logDate}.log"
 
 #-- MAIN --#
-"$(get-date) - Starting ScriptName Script" | Out-File $runLog -Append
+"$(get-date) - Starting SA_LoadMonitor Script" | Out-File $runLog -Append
 
-D:\inserver6\bin64\intool --cmd run-iscript --file ${root}script\SA_LoadMonitor.js
+D:\inserver6\bin64\intool --cmd run-iscript --file ${root}script\SA_LoadMonitor.js >> $runLog
 
 <#
 Use this if you want to be notified when the script finishes running
@@ -44,4 +44,4 @@ sendmail -t "gjenczyk@umassp.edu" -s "[DI ${env} Notice] ScriptName.ps1 has fini
 #>
 
 $error[0] | Out-File $runLog -Append
-"$(get-date) - Finishing ScriptName Script" | Out-File $runLog -Append
+"$(get-date) - Finishing SA_LoadMonitor Script" | Out-File $runLog -Append

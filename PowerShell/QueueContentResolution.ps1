@@ -19,12 +19,12 @@
 # #############################################################################
 
 #-- INCLUDES --#
-. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
+. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
 
 #-- CONFIG --#
 
 $localRoot = "D:\"
-$root = "\\boisnas215c1.umasscs.net\diimages67tst\"
+$root = "\\ssisnas215c2.umasscs.net\diimages67prd\"
 $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
 $logDate = $(get-date -format 'yyyyMMdd')
@@ -36,7 +36,7 @@ $scriptLog = "${root}log\QueueContentResolution_${logDate}.log"
 #-- MAIN --#
 "$(get-date) - Starting QueueContentResolution Script" | Out-File $runLog -Append
 
-D:\inserver6\bin64\intool3 --cmd run-iscript --file ${root}script\QueueContentResolution.js
+D:\inserver6\bin64\intool --cmd run-iscript --file ${root}script\QueueContentResolution.js >> $runLog
 
 <#
 Use this if you want to be notified when the script finishes running

@@ -18,8 +18,8 @@
 # #############################################################################>
 
 #-- INCLUDES --#
-. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
-. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\enVar.ps1"
+. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
+. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\enVar.ps1"
 
 #-- CONFIGURATION --#
 
@@ -31,6 +31,7 @@ $yesterday = (Get-Date).AddDays(0).Date
 
 $fatalFlag = $false
 $fatalFileArray = @()
+
 
 
 #- Date formatting -#
@@ -45,7 +46,6 @@ $s = $l[5]
 
 $zipBase = "${localLog}Archive_log_$y$m$d`_$h.$mi.$s"
 $zip = "${zipBase}.zip"
-
 #-- FUNCTION --#
 
 function ZipFile( $zipfilename, $sourcedir )
@@ -59,7 +59,7 @@ function ErrorCheck( $file )
 {
     if(Select-String -Path $file -Pattern "Fatal iScript Error!")
     {
-        $script:fatalFlag = $true  
+        $script:fatalFlag = $true
         $script:fatalFileArray += $file.Name+"`n"
     }
 }
@@ -67,7 +67,7 @@ function ErrorCheck( $file )
 function EmailNotify
 {
     $body = "The following log files on $machine contained fatal errors:`n $fatalFileArray The logs have been archived in $zip.  `nPlease review to see if corrective action is required."
-    sendmail -to "gjenczyk@umassp.edu" -s "[DI $env Warning] Fatal iScript Errors Detected on $machine" -m $body
+    sendmail -to gjenczyk@umassp.edu, cmatera@umassp.edu -s "[DI $env Warning] Fatal iScript Errors Detected on $machine" -m $body
 }
 
 
@@ -75,7 +75,7 @@ function EmailNotify
 
 New-Item -Path $zipBase -ItemType Directory
 
-$files = Get-ChildItem $localLog -Exclude "run_log*","Archive*" -Recurse -af | Where-Object {$_.LastWriteTime.Date -lt $yesterday}
+$files = Get-ChildItem $localLog -Exclude "Archive*" -Recurse -af | Where-Object {$_.LastWriteTime.Date -lt $yesterday}
 
 foreach($file in $files){
 
@@ -87,8 +87,6 @@ foreach($file in $files){
 ZipFile $zip $zipBase
 
 Remove-Item -Path $zipBase -Recurse -Force
-
-"fatal flag = $fatalFlag" | Out-File -Append $runLog
 
 if ($fatalFlag)
 {

@@ -20,11 +20,8 @@
 Param([string]$passedDate)
 
 #-- INCLUDES --#
-. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
-. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\enVar.ps1"
-
-$passedDate = 1262015
-
+. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
+. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\enVar.ps1"
 
 #-- CONFIG --#
 
@@ -52,7 +49,8 @@ if (Test-Path "${csvDir}_D_${passedDate}.csv")
     $attachment += "${csvDir}_D_${passedDate}.csv"
 }
 
-sendmail -s "[DI $env Notice] User Report for $(Get-Date -Format MM/dd/yyyy)" -a $attachment -m $body -to gjenczyk@umassp.edu -flag "BodyAsHtml"
+sendmail -s "[DI $env Notice] User Report for $(Get-Date -Format MM/dd/yyyy)" -a $attachment -m $body -to gjenczyk@umassp.edu, cmatera@umassp.edu, lprudden@umassp.edu -flag "BodyAsHtml"
 
 Remove-Item -Path "${csvDir}_D_${passedDate}.csv" -ErrorAction SilentlyContinue
 Remove-Item -Path "${csvDir}_R_${passedDate}.csv"
+Remove-Item -Path "${csvDir}_F_${passedDate}.csv"

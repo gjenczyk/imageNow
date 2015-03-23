@@ -20,8 +20,8 @@
 
 # Environment #
 
-$root = "\\boisnas215c1.umasscs.net\di_interfaces\"
-$shareRoot = "\\boisnas215c1.umasscs.net\di_interfaces\"
+$root = "Y:\"
+$shareRoot = "\\ssisnas215c2.umasscs.net\diimages67prd\"
 $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
 $inserver6 = "D:\inserver6\"
@@ -38,7 +38,8 @@ function cleanUp () {
         [string]$dir,
         [string]$age,
         [string[]]$extension,
-        [switch]$subfolder
+        [switch]$subfolder,
+        [switch]$removeSubs
     )
 
     if (!$subfolder){
@@ -54,7 +55,11 @@ function cleanUp () {
 
             if (((get-date) - $fileAge) -gt $ageToCheck) {
                 "Deleting $file" | Out-File ${runLog} -Append
-                Remove-Item -path $file 
+                Remove-Item -path $file
+                if (!$?)
+                {
+                    "$error[0]" |  Out-File ${runLog} -Append
+                } 
             } # end of age check & deletion
         } # end of for each
          
@@ -67,12 +72,12 @@ function cleanUp () {
          Get-ChildItem $dir | ForEach-Object {
 
             $workingSub = "${dir}$_\"
-            
+            $ageToCheck = New-TimeSpan -days $age
+
             $files =[IO.Directory]::GetFiles($workingSub)
             
             foreach($file in $files) {
 
-                $ageToCheck = New-TimeSpan -days $age
                 $fileAge = (get-item $file).LastWriteTime
 
                 if (((get-date) - $fileAge) -gt $ageToCheck) {
@@ -80,6 +85,16 @@ function cleanUp () {
                      Remove-Item -path $file 
                 } #end of delete
             } #end of for each in files
+
+            if($removeSubs)
+            {
+                $folderAge = (get-item $workingSub).LastWriteTime
+                if (((get-date) - $folderAge) -gt $ageToCheck) {
+                    "Removing $workingSub || $folderAge" | Out-File -Append ${runLog}
+                    Remove-Item -path $workingSub -recurse -force
+                } #end of folder cleanUp
+            } #end of removeSubs
+
             } #end of foreach-object
         } #end of if dir exists
     } # end of else
@@ -88,16 +103,17 @@ function cleanUp () {
 
 # USAGE -d: Directory -a: age of file in days -e: file specifier -s: flag if subfolders need to be removed #
 
-cleanUp -d ${root}import_agent\DI_${env}_SA_AD_INBOUND\ -a 5 -e "*"
-cleanUp -d ${root}import_agent\DI_${env}_SA_AD_INBOUND\failure\ -a 5
-cleanUp -d ${root}import_agent\DI_${env}_SA_AD_INBOUND\success\ -a 5
+cleanUp -d ${root}import_agent\DI_${env}_SA_AD_INBOUND\ -a 14 -e "*"
+cleanUp -d ${root}import_agent\DI_${env}_SA_AD_INBOUND\failure\ -a 7
+cleanUp -d ${root}import_agent\DI_${env}_SA_AD_INBOUND\success\ -a 14
 cleanUp -d ${root}DI_${env}_COMMONAPP_AD_INBOUND\archive\ -a 14
 cleanUp -d ${root}DI_${env}_COMMONAPP_AD_INBOUND\ca_logs\ -a 14
 cleanUp -d ${root}DI_${env}_COMMONAPP_AD_INBOUND\error\ -a 7 -s
 cleanUp -d ${root}DI_${env}_COMMONAPP_AD_INBOUND\1_unzipFiles\ -a 7 -s
 cleanUp -d ${root}DI_${env}_DATABANK_AD_INBOUND\archive\ -a 14
 cleanUp -d ${root}DI_${env}_DATABANK_AD_INBOUND\logs\ -a 14
-cleanUp -d ${shareRoot}INMAC\out\ -a 5 -s
+#cleanUp -d ${shareRoot}INMAC\out\ -a 5 -s -r
+#cleanUp -d ${shareRoot}log\ -a 30 -s -r
 #cleanUp -d ${root}DI_${env}_DATABANK_AD_INBOUND\error\ -a 7 -s
 
 

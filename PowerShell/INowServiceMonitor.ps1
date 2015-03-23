@@ -12,6 +12,7 @@
 # 1.0 2014.05.05 Initial Version.
 # 1.1 2014.05.08 Finished handling for situations where services fail to start.
 # 1.2 2014.10.01 Added a section to start services on a foreign computer
+# 1.3 2015.02.13 This is wicked ugly and needs a thorough cleaning.  re: import agent part
 #
 # TO ADD:
 # 
@@ -19,23 +20,23 @@
 # "$(Get-Date) " | Out-File -Append $runLog
 ##############################################################################>
 
-. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
+. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
 
-$logPath = "\\boisnas215c1.umasscs.net\diimages67tst\log\INowServiceMonitor.log"
-
-$hostnm = hostname
-$env = $hostnm.ToUpper().substring(2,5)
-$serviceArray = @()
-$failureArray = @()
+$logPath = "\\ssisnas215c2.umasscs.net\diimages67prd\log\INowServiceMonitor.log"
 
 $env = hostname
 $env = $env.ToUpper().substring(2,5)
 $serviceArray = @()
 $failureArray = @()
+$foreignServiceArray = @()
+$foreignFailureArray = @()
 $restartedServices = $false
+$restartedForeignServices = $false
 $failedServices = $false
+$failedForeignServices
 $successMessage = $false
-$foreignComputer = @("DITST67APPRAS01")
+$foreignSuccess = $false
+$foreignComputer = @("DIPRD67APPRAS01")
 
 Get-Service | Where-Object {$_.Name -match "ImageNow Se*" -and $_.Status -eq "Stopped"} | ForEach-Object {
     
@@ -43,7 +44,7 @@ Get-Service | Where-Object {$_.Name -match "ImageNow Se*" -and $_.Status -eq "St
     if ($?)
     {
         $startedService = $_.Name
-        "Started $startedService at $(Get-Date)" | Out-File -Append -FilePath $logPath
+        "SERVER BLOCK 1: Started $startedService at $(Get-Date)" | Out-File -Append -FilePath $logPath
         $serviceArray += "$startedService`n"
         $restartedServices = $true
     }
@@ -51,7 +52,7 @@ Get-Service | Where-Object {$_.Name -match "ImageNow Se*" -and $_.Status -eq "St
     {
         $error[0] | Out-File -Append -FilePath $logPath
         $failedStart = $_.Name
-        "Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
+        "SERVER BLOCK 2: Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
         $failureArray += "$failedStart"
         $restartedServices = $true
         $failedServices = $true
@@ -60,13 +61,13 @@ Get-Service | Where-Object {$_.Name -match "ImageNow Se*" -and $_.Status -eq "St
 
 Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Status -eq "Stopped"} | ForEach-Object {
 
-    if ($_.Name -notmatch "ImageNow Retention*" -and $_.Name -notmatch "ImageNow Import*") 
+    if ($_.Name -notmatch "ImageNow Retention*" -and $_.Name -notmatch "ImageNow Import*" -and $_.Name -notmatch "ImageNow Monitor*") 
     {
         Start-Service $_.Name
         if ($?)
         {
             $startedService = $_.Name
-            "Started $startedService at $(Get-Date)" | Out-File -Append -FilePath $logPath
+            "SERVICE BLOCK 1: Started $startedService at $(Get-Date)" | Out-File -Append -FilePath $logPath
             $serviceArray += "$startedService`n"
             $restartedServices = $true
         }
@@ -74,20 +75,20 @@ Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Status -eq "Stopp
         {
             $error[0] | Out-File -Append -FilePath $logPath
             $failedStart = $_.Name
-            "Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
+            "SERVICE BLOCK 2: Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
             $failureArray += "$failedStart"
             $restartedServices = $true
             $failedServices = $true
         }
     } 
 
-    if ($_.Name -match "ImageNow Import*")# -and $_.Status -eq 'Stopped')
+    if ($_.Name -match "ImageNow Import*")
     {
         $importService = $_.Name
-        $appServers = @("DITST67WEBIMG01", "DITST67WEBIMG02")
+        $appServers = @("DIPRD67WEBIMG01", "DIPRD67WEBIMG02")
         [System.Collections.ArrayList]$appArray = $appServers
 
-        if ((Get-WmiObject -Class Win32_Service -Property StartMode -Filter "Name='$importService'") | Where-Object {$_.StartMode -match "Manual"})
+        if ((Get-WmiObject -Class Win32_Service -Property StartMode,Name -Filter "Name LIKE '$importService'") | Where-Object {$_.StartMode -match "Manual"})
         {
             $appArray.Remove($hostnm)
 
@@ -97,7 +98,7 @@ Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Status -eq "Stopp
                if ($?)
                 {
                     $startedService = $importService
-                    "Started $startedService at $(Get-Date)" | Out-File -Append -FilePath $logPath
+                    "INPORT SERVICE 1: Started $startedService at $(Get-Date)" | Out-File -Append -FilePath $logPath
                     $serviceArray += "$startedService`n"
                     $restartedServices = $true
                 }
@@ -105,7 +106,7 @@ Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Status -eq "Stopp
                 {
                     $error[0] | Out-File -Append -FilePath $logPath
                     $failedStart = $importService
-                    "Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
+                    "INPORT SERVICE 2: Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
                     $failureArray += "$failedStart"
                     $restartedServices = $true
                     $failedServices = $true
@@ -121,7 +122,7 @@ Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Status -eq "Stopp
                 else 
                 {
                     $error[0] | Out-File -Append -FilePath $logPath
-                    "Failed to stop $importService at $(Get-Date)" | Out-File -Append -FilePath $logPath
+                    "INPORT SERVICE 3: Failed to stop $importService at $(Get-Date)" | Out-File -Append -FilePath $logPath
                     $failStopSub = "[DI $env Notice] Failed to stop $importService on $(hostname)"
                     $failStopMessage = "INowServiceMonitor has detected that the Import Agent service is running on two servers`nAn attempt to stop the second instance of the service was not successful.`nPlease stop the service on $(hostname) as soon as possible.`nFailure to stop the service may result in problems with imports."
                     sendmail -t gjenczyk@umassp.edu, cmatera@umassp.edu -s 
@@ -129,14 +130,73 @@ Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Status -eq "Stopp
             }
 
         }
+        elseif ((Get-WmiObject -Class Win32_Service -Property StartMode,Name -Filter "Name LIKE '$importService'") | Where-Object {$_.StartMode -match "Auto"})
+        {
+            $appArray.Remove($hostnm)
+            if ((Get-Service -ComputerName $appArray | Where-Object {$_.Name -match "ImageNow Import*" -and $_.Status -match "Running"})) #-and (Get-Service | Where-Object {$_.Name -match "ImageNow Import*" -and $_.Status -match "Running"}))
+            {
+                (Get-Service -ComputerName $appArray | Where-Object {$_.Name -match "ImageNow Import*" -and $_.Status -match "Running"}).Stop()
+                if ($?)
+                {
+                    "Stopped $importService at $(Get-Date) because it was running on $appArray" | Out-File -Append -FilePath $logPath
+                }
+                else 
+                {
+                    $error[0] | Out-File -Append -FilePath $logPath
+                    "INPORT SERVICE 4: Failed to stop $importService at $(Get-Date)" | Out-File -Append -FilePath $logPath
+                    $failStopSub = "[DI $env Notice] Failed to stop $importService on $(hostname)"
+                    $failStopMessage = "INowServiceMonitor has detected that the Import Agent service is running on two servers`nAn attempt to stop the second instance of the service was not successful.`nPlease stop the service on $(hostname) as soon as possible.`nFailure to stop the service may result in problems with imports."
+                    sendmail -t gjenczyk@umassp.edu, cmatera@umassp.edu -s $failStopSub -m $failStopMessage
+                }
+
+                Start-Service $importService
+                if ($?)
+                {
+                    $startedService = $importService
+                    "IMPORT SERVICE 5: Started $startedService at $(Get-Date)" | Out-File -Append -FilePath $logPath
+                    $serviceArray += "$startedService`n"
+                    $restartedServices = $true
+                }
+                else
+                {
+                    $error[0] | Out-File -Append -FilePath $logPath
+                    $failedStart = $importService
+                    "INPORT SERVICE 6: Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
+                    $failureArray += "$failedStart"
+                    $restartedServices = $true
+                    $failedServices = $true
+                }
+
+            }
+            else
+            {
+            
+                Start-Service $importService
+                if ($?)
+                {
+                    $startedService = $importService
+                    "IMPORT SERVICE 7: Started $startedService at $(Get-Date)" | Out-File -Append -FilePath $logPath
+                    $serviceArray += "$startedService`n"
+                    $restartedServices = $true
+                }
+                else
+                {
+                    $error[0] | Out-File -Append -FilePath $logPath
+                    $failedStart = $importService
+                    "INPORT SERVICE 8: Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
+                    $failureArray += "$failedStart"
+                    $restartedServices = $true
+                    $failedServices = $true
+                }
+            }
+        }
         else
         {
-            
             Start-Service $importService
             if ($?)
             {
                 $startedService = $importService
-                "Started $startedService at $(Get-Date)" | Out-File -Append -FilePath $logPath
+                "IMPORT SERVICE 9: Started $startedService at $(Get-Date)" | Out-File -Append -FilePath $logPath
                 $serviceArray += "$startedService`n"
                 $restartedServices = $true
             }
@@ -144,7 +204,7 @@ Get-Service | Where-Object {$_.Name -match "ImageNow*" -and $_.Status -eq "Stopp
             {
                 $error[0] | Out-File -Append -FilePath $logPath
                 $failedStart = $importService
-                "Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
+                "INPORT SERVICE 10: Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
                 $failureArray += "$failedStart"
                 $restartedServices = $true
                 $failedServices = $true
@@ -158,28 +218,47 @@ foreach ($computer in $foreignComputer)
 {
     "$computer"
 
-    Get-Service -ComputerName $computer | Where-Object {$_.Name -match 'Image*' -and $_.Status -match 'Stopped*'} | ForEach-Object {
+    Get-Service -ComputerName $computer | Where-Object {$_.Name -match 'Image*' -and $_.Status -match 'Stopped*' and $_.Name -notmatch "ImageNow Monitor*"} | ForEach-Object {
 
         $foreignService = $_.Name
-    
-        Set-Service -ComputerName $computer $_.Name -Status Running
+        
+        Set-Service -ComputerName $computer $foreignService -Status Running
     
         if ($?)
         {
-            $startedService = $foreignService
-            "Started $startedService at $(Get-Date)" | Out-File -Append -FilePath $logPath
-            $serviceArray += "$startedService`n"
-            $restartedServices = $true
+            "FOREIGN SERVICE 1: Started $foreignService at $(Get-Date)" | Out-File -Append -FilePath $logPath
+            $foreignServiceArray += "$foreignService`n"
+            $restartedForeignServices = $true
+            $foreignSuccses = $true
         }
         else
         {
             $error[0] | Out-File -Append -FilePath $logPath
-            $failedStart = $foreignService
-            "Failed to start $failedStart at $(Get-Date)" | Out-File -Append -FilePath $logPath
-            $failureArray += "$failedStart"
-            $restartedServices = $true
-            $failedServices = $true
+            "FOREIGN SERVICE 2: Failed to start $foreignService at $(Get-Date)" | Out-File -Append -FilePath $logPath
+            $foreignFailureArray += "$foreignService`n"
+            $failedForeignServices = $true
+            $restartedForeignServices = $true
         }
+    }
+
+    if ($restartedForeignServices)
+    {
+        $foreignSub = "[DI $env Notice] Services have been restarted on $computer"
+        $foreignMessage = "The following services on $computer were stopped:`n`n${foreignServiceArray}`nThey were restarted at $(Get-Date)"
+        if ($failedForeignServices)
+        {
+            $foreignSub = "[DI $env Notice] Service Notification for $computer"
+            $foreignFailMessage = "The following service(s) could not be started on ${foreignServiceArray}:`n`n${foreignFailureArray}"
+            if ($foreignSuccess)
+            {
+                $foreignMessage += "`n$foreignFailMessage"
+            }
+            else
+            {
+                $foreignMessage = $foreignFailMessage
+            }
+        }
+      sendmail -t gjenczyk@umassp.edu -s $foreignSub -m $foreignMessage
     }
 }
 
@@ -203,7 +282,7 @@ if ($restartedServices)
         if ($failureArray -ne 0)
         {
             $subject = "[DI $env Notice] Service Notification for $(hostname)"
-            $failMessage = "The following service(s) could not be started:`n`n${failureArray}"
+            $failMessage = "The following service(s) could not be started on $(hostname):`n`n${failureArray}"
             
             if ($successMessage)
             {
@@ -216,5 +295,5 @@ if ($restartedServices)
         }
     }
 
-    sendmail -t gjenczyk@umassp.edu, cmatera@umassp.edu -s $subject -m $message
+    sendmail -t gjenczyk@umassp.edu, cmatera@umassp.edu, lprudden@umassp.edu -s $subject -m $message
 }
