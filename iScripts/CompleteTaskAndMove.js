@@ -31,7 +31,7 @@
 #define DEBUG_LEVEL         5       // 0 - 5.  0 least output, 5 most verbose
 #define SPLIT_LOG_BY_THREAD false   // set to true in high volume scripts when multiple worker threads are used (workflow, external message agent, etc)
 #define MAX_LOG_FILE_SIZE   100     // Maximum size of log file (in MB) before a new one will be created
-#define USE_CSV             true    //true if using a csv to complete projects, false if just doing everythign in a queue
+#define USE_CSV             false    //true if using a csv to complete projects, false if just doing everythign in a queue
 
 // *********************       End  Configuration     *******************
 
@@ -105,184 +105,166 @@ function main ()
 function processByQueue()
 {
   debug.log("INFO","Attempting to load YAML\n");
-            loadYAMLConfig(imagenowDir6+"\\script\\CompleteTaskAndMove\\queue_config\\");
+  loadYAMLConfig(imagenowDir6+"\\script\\CompleteTaskAndMove\\queue_config\\");
 
-            for (var sourceQConfig in CFG.queue_config)
-            { 
-              debug.log("DEBUG","Begin processing CTaM configuration\n");
-              var CTaM_CONFIG = CFG.queue_config[sourceQConfig].CTaM_CONFIG;
+  for (var sourceQConfig in CFG.queue_config)
+  { 
+    debug.log("DEBUG","Begin processing CTaM configuration\n");
+    var CTaM_CONFIG = CFG.queue_config[sourceQConfig].CTaM_CONFIG;
 
-              debug.log("DEBUG","Elements in YAML File [%s]\n",CTaM_CONFIG.length);
-              for(var i=0; i<CTaM_CONFIG.length; i++)
+    debug.log("DEBUG","Elements in YAML File [%s]\n",CTaM_CONFIG.length);
+    for(var i=0; i<CTaM_CONFIG.length; i++)
+    {
+      debug.log("DEBUG","CTaM Config: [%s], [%s], [%s], [%s], [%s]\n",CTaM_CONFIG[i].SOURCE_QUEUE, CTaM_CONFIG[i].ERROR_QUEUE, CTaM_CONFIG[i].TASK_TEMPLATE, CTaM_CONFIG[i].TASK_REASON, CTaM_CONFIG[i].DESTINATION_QUEUE);
+
+      var wfQueue = new INWfQueue();
+      wfQueue.name = CTaM_CONFIG[i].SOURCE_QUEUE;
+
+      var queueStartTime = new Date(1970, 1, 1);
+
+      var wfItems = wfQueue.getItemList(WfItemState.Any, WfItemQueryDirection.AfterTimestamp, 2, queueStartTime);
+
+      if (wfItems == null || !wfItems)
+      {
+        debug.log("ERROR","Unable to get items from [%s]: [%s]\n", CTaM_CONFIG[i].SOURCE_QUEUE, getErrMsg());
+        continue;
+      }
+
+      printf("Found [%s] items in [%s]\n", wfItems.length, CTaM_CONFIG[i].SOURCE_QUEUE);
+      var curCount = wfItems.length;
+      debug.log("INFO","Found [%s] items in [%s]\n", wfItems.length, CTaM_CONFIG[i].SOURCE_QUEUE);
+
+      var taskTemplate = new INTaskTemplate();
+      taskTemplate.name = CTaM_CONFIG[i].TASK_TEMPLATE;
+      if (!taskTemplate.getInfo())
+      {
+        debug.log("ERROR","Could not get info for task template [%s]: [%s]", CTaM_CONFIG[i].TASK_TEMPLATE, getErrMsg());
+        continue;
+      }
+
+      //printf("%s\n", taskTemplate.id)
+      var targetTemplate = taskTemplate.id;
+      var targetQueue = CTaM_CONFIG[i].DESTINATION_QUEUE;
+
+      var taskReasonList = taskTemplate.actionReasonListID;
+      var reasonList = INBizList.get(taskReasonList);
+      
+      if (!reasonList || reasonList == null)
+      {
+        debug.log("ERROR","Could not get task reason list for [%s]: [%s]\n", CTaM_CONFIG[i].TASK_TEMPLATE, getErrMsg());
+        continue;
+      }
+
+      var taskReason = reasonList.getMembers();
+
+      if (!taskReason || taskReason == null)
+      {
+        debug.log("ERROR","Could not get task reason list for [%s]: [%s]\n", reasonList.name, getErrMsg());
+        continue;
+      }
+
+      //validate the task reason is in the list and get it's ID
+      var taskInfo = {flag:false,id:null,text:null};
+      taskInfo = validateElement(taskInfo,taskReason,CTaM_CONFIG[i].TASK_REASON);
+
+      if (!taskInfo.flag)
+      {
+        debug.log("ERROR","Could not find the task reason [%s] in [%s]\n", CTaM_CONFIG[i].TASK_REASON, taskTemplate.name);
+        continue;
+      }
+
+      for (var k=0; k<wfItems.length; k++)
+      {
+        var folder = new INFolder(wfItems[k].objectId);
+        if (!folder.getInfo())
+        {
+          debug.log("ERROR","Could not retrieve info for folder ID [%s]: [%s]\n", wfItems[k].objectId, getErrMsg());
+          continue;
+        }
+
+        var wfFolder = folder.getWfInfo();
+        if (!wfFolder || wfFolder == null)
+        {
+          debug.log("ERROR","Could not retrieve workflow info for folder ID [%s]: [%s]\n", folder.id, getErrMsg());
+          continue;
+        }              
+        debug.log("DEBUG","Working folder: [%s]\n",folder.id);
+        var taskList = new Array();
+        if(!INTask.getTasks(folder.id,"","",taskList))
+        {
+          debug.log("ERROR","Failed to get tasks for [%s]: [%s]\n", folder.id, getErrMsg());
+          continue;
+        }
+        else
+        {
+          var readyToRoute = false;
+
+          var taskToUse = {id:null,taskTemplateID:null,creationTime:0};
+          taskToUse = getLatestTask(taskToUse, taskList, targetTemplate);
+
+          if (taskToUse.id == null)
+          {
+            debug.log("WARNING","No available tasks to complete for [%s]\n",folder.id);
+            continue;
+          }
+
+          var thisTask = new INTask(taskToUse.taskTemplateID, taskToUse.id);
+
+          if (!thisTask.getInfo())
+          {
+            debug.log("ERROR", "Could not get info for task [%s]: [%s]\n", taskToUse.id, getErrMsg());
+            continue;
+          }
+
+          var taskToWork;
+          if(!(taskToWork = INTask.workByID(thisTask.id)))
+          {
+              debug.log("ERROR","Unable to get task [%s] for processing: [%s]\n", thisTask.id, getErrMsg());
+              continue;
+          }
+          else
+          {
+            debug.log("INFO","Working task [%s] for [%s]\n", thisTask.id, folder.id);
+
+            if(!thisTask.complete(taskInfo.id))
+            {
+              debug.log("ERROR","Could not complete task for [%s]: [%s]\n", folder.id, getErrMsg());
+              continue;
+            }
+            else
+            {
+              if(!thisTask.addComment("Task completed by CompleteTaskAndMove.js: " + taskInfo.text))
               {
-                debug.log("DEBUG","CTaM Config: [%s], [%s], [%s], [%s], [%s]\n",CTaM_CONFIG[i].SOURCE_QUEUE, CTaM_CONFIG[i].ERROR_QUEUE, CTaM_CONFIG[i].TASK_TEMPLATE, CTaM_CONFIG[i].TASK_REASON, CTaM_CONFIG[i].DESTINATION_QUEUE);
+                debug.log("ERROR", "Could not add comment to task with completion\n");
+              }
 
-                var wfQueue = new INWfQueue();
-                wfQueue.name = CTaM_CONFIG[i].SOURCE_QUEUE;
+              printf("[%s]ID: [%s] - Completed [%s] with a reason of [%s]\n", curCount, folder.id, thisTask.id, taskInfo.text);
+              debug.log("INFO","[%s]ID: [%s] - Completed [%s] with a reason of [%s]\n", curCount, folder.id, thisTask.id, taskInfo.text);
+              curCount--;
+              readyToRoute = true;
+            }
+          }// end of working current assigned task
 
-                var queueStartTime = new Date(1970, 1, 1);
+          if (readyToRoute)
+          {          
+            if(!RouteItem(wfFolder[0].id, targetQueue, "CTaM: " + taskInfo.text + " to " + targetQueue))
+            {
+              debug.log("ERROR","Failed to route [%s]: [%s]\n", folder.id, getErrMsg());
+              continue;
+            }
+            else
+            {
+              debug.log("INFO","Successfully routed [%s] to [%s].\n", folder.id, targetQueue);
+            }
+          }
 
-                var wfItems = wfQueue.getItemList(WfItemState.Any, WfItemQueryDirection.AfterTimestamp, 1000, queueStartTime);
+        }// end of task processing for current folder
 
-                if (wfItems == null || !wfItems)
-                {
-                  debug.log("ERROR","Unable to get items from [%s]: [%s]\n", CTaM_CONFIG[i].SOURCE_QUEUE, getErrMsg());
-                  continue;
-                }
+      }// end of processing for items in source queue
 
-                printf("Found [%s] items in [%s]\n", wfItems.length, CTaM_CONFIG[i].SOURCE_QUEUE);
-                var curCount = wfItems.length;
-                debug.log("INFO","Found [%s] items in [%s]\n", wfItems.length, CTaM_CONFIG[i].SOURCE_QUEUE);
+    } // end of for individual configs in yaml
 
-                var taskTemplate = new INTaskTemplate();
-                taskTemplate.name = CTaM_CONFIG[i].TASK_TEMPLATE;
-                if (!taskTemplate.getInfo())
-                {
-                  debug.log("ERROR","Could not get info for task template [%s]: [%s]", CTaM_CONFIG[i].TASK_TEMPLATE, getErrMsg());
-                  continue;
-                }
-
-                //printf("%s\n", taskTemplate.id)
-                var targetTemplate = taskTemplate.id;
-                var targetQueue = CTaM_CONFIG[i].DESTINATION_QUEUE;
-
-                var taskReasonList = taskTemplate.actionReasonListID;
-                var reasonList = INBizList.get(taskReasonList);
-                
-                if (!reasonList || reasonList == null)
-                {
-                  debug.log("ERROR","Could not get task reason list for [%s]: [%s]\n", CTaM_CONFIG[i].TASK_TEMPLATE, getErrMsg());
-                  continue;
-                }
-
-                var taskReason = reasonList.getMembers();
-
-                if (!taskReason || taskReason == null)
-                {
-                  debug.log("ERROR","Could not get task reason list for [%s]: [%s]\n", reasonList.name, getErrMsg());
-                  continue;
-                }
-
-
-                var reasonExists = false;
-                var taskCompletionReason;
-                var textTaskCompletionReason;
-
-                for (var j=0; j<taskReason.length; j++)
-                {
-                  if(taskReason[j].text == CTaM_CONFIG[i].TASK_REASON)
-                  {
-                    taskCompletionReason = taskReason[j].id;
-                    textTaskCompletionReason = taskReason[j].text;
-                    reasonExists = true;
-                    break;
-                  }
-                }// end of getting the task reason ID
-
-                if (!reasonExists)
-                {
-                  debug.log("ERROR","Could not find the task reason [%s] in [%s]\n", CTaM_CONFIG[i].TASK_REASON, taskTemplate.name);
-                  continue;
-                }
-
-                for (var k=0; k<wfItems.length; k++)
-                {
-                  var folder = new INFolder(wfItems[k].objectId);
-                  if (!folder.getInfo())
-                  {
-                    debug.log("ERROR","Could not retrieve info for folder ID [%s]: [%s]\n", wfItems[k].objectId, getErrMsg());
-                    continue;
-                  }
-
-                  var wfFolder = folder.getWfInfo();
-                  if (!wfFolder || wfFolder == null)
-                  {
-                    debug.log("ERROR","Could not retrieve workflow info for folder ID [%s]: [%s]\n", folder.id, getErrMsg());
-                    continue;
-                  }              
-                  debug.log("DEBUG","Working folder: [%s]\n",folder.id);
-                  var taskList = new Array();
-                  if(!INTask.getTasks(folder.id,"","",taskList))
-                  {
-                    debug.log("ERROR","Failed to get tasks for [%s]: [%s]\n", folder.id, getErrMsg());
-                    continue;
-                  }
-                  else
-                  {
-                    var readyToRoute = false;
-
-                    for(var l=0; l<taskList.length; l++)
-                    {
-                      if (targetTemplate == taskList[l].taskTemplateID)
-                      {
-                        var thisTask = new INTask(taskList[l].taskTemplateID, taskList[l].id);
-
-                        if (!thisTask.getInfo())
-                        {
-                          debug.log("ERROR", "Could not get info for task [%s]: [%s]\n", taskList[l].id, getErrMsg());
-                          continue;
-                        }
-
-                        if (thisTask.state == "Assigned")
-                        {
-                          var taskToWork;
-                          if(!(taskToWork = INTask.workByID(thisTask.id)))
-                          {
-                              debug.log("ERROR","Unable to get task [%s] for processing: [%s]\n", thisTask.id, getErrMsg());
-                              continue;
-                          }
-                          else
-                          {
-                            debug.log("INFO","Working task [%s] for [%s]\n", thisTask.id, folder.id);
-
-                            if(!thisTask.complete(taskCompletionReason))
-                            {
-                              debug.log("ERROR","Could not complete task for [%s]: [%s]\n", folder.id, getErrMsg());
-                              continue;
-                            }
-                            else
-                            {
-                              if(!thisTask.addComment("Task completed by CompleteTaskAndMove.js: " + textTaskCompletionReason))
-                              {
-                                debug.log("ERROR", "Could not add comment to task with completion\n");
-                              }
-
-                              printf("[%s]ID: [%s] - Completed [%s] with a reason of [%s]\n", curCount, folder.id, thisTask.id, textTaskCompletionReason);
-                              debug.log("INFO","[%s]ID: [%s] - Completed [%s] with a reason of [%s]\n", curCount, folder.id, thisTask.id, textTaskCompletionReason);
-                              curCount--;
-                              readyToRoute = true;
-                              //break to only complete one task if there are multiple!
-                              break;
-                            }
-
-                          }// end of working current assigned task
-
-                        }// end of processing for assigned tasks
-
-                      }// end of processing for target task template
-
-                    }// end of for loop checking for target task template
-
-                    if (readyToRoute)
-                    {          
-                      if(!RouteItem(wfFolder[0].id, targetQueue, "CTaM: " + textTaskCompletionReason + " to " + targetQueue))
-                      {
-                        debug.log("ERROR","Failed to route [%s]: [%s]\n", folder.id, getErrMsg());
-                        continue;
-                      }
-                      else
-                      {
-                        debug.log("INFO","Successfully routed [%s] to [%s].\n", folder.id, targetQueue);
-                      }
-                    }
-
-                  }// end of task processing for current folder
-
-                }// end of processing for items in source queue
-
-              } // end of for individual configs in yaml
-
-            } // end of for config in yaml
+  } // end of for config in yaml
 
 } // END OF PROCESS BY QUEUE 
 
@@ -390,23 +372,11 @@ function processByCSV()
         continue;
       }
 
+      //validate the task reason is in the list and get its ID
+      var taskInfo = {flag:false,id:null,text:null};
+      taskInfo = validateElement(taskInfo,csvTskRsn,tskRsn);
 
-      var csvReasonExists = false;
-      var csvtaskCmpltnReason;
-      var csvTextTaskCmpltnReason;
-
-      for (var j=0; j<csvTskRsn.length; j++)
-      {
-        if(csvTskRsn[j].text == tskRsn)
-        {
-          csvtaskCmpltnReason = csvTskRsn[j].id;
-          csvTextTaskCmpltnReason = csvTskRsn[j].text;
-          csvReasonExists = true;
-          break;
-        }
-      }// end of getting the task reason ID
-
-      if (!csvReasonExists)
+      if (!taskInfo.flag)
       {
         debug.log("ERROR","Could not find the task reason [%s] in [%s]\n", csvTskRsn, csvTemplate.name);
         continue;
@@ -444,25 +414,11 @@ function processByCSV()
       else
       {
         var readyToRoute = false;
-        var useThisTask = {id:"",taskTemplateID:"",creationTime:0};
-        var foundTask = false;
+        var useThisTask = {id:null,taskTemplateID:null,creationTime:0};
 
-        //sort by assigned time?
-        for (var m = 0; m<csvTaskList.length; m++)
-        {
-          if((csvTaskList[m].taskTemplateID == csvTargetTemplate) && (csvTaskList[m].state == "Assigned"))
-          {
-            if(csvTaskList[m].creationTime > useThisTask.creationTime)
-            {
-              useThisTask.id = csvTaskList[m].id;
-              useThisTask.taskTemplateID = csvTaskList[m].taskTemplateID;
-              useThisTask.creationTime = csvTaskList[m].creationTime;
-              foundTask = true;
-            }
-          }
-        }
+        useThisTask = getLatestTask(uesThisTask, csvTaskList, csvTargetTemplate);
 
-        if(!foundTask)
+        if(useThisTask.id == null)
         {
           debug.log("WARNING","No available tasks to complete for [%s]\n",folder.id);
           continue;
@@ -486,20 +442,20 @@ function processByCSV()
         {
           debug.log("INFO","Working task [%s] for [%s]\n", thisTask.id, folder.id);
 
-          if(!thisTask.complete(csvtaskCmpltnReason))
+          if(!thisTask.complete(taskInfo.id))
           {
             debug.log("ERROR","Could not complete task for [%s]: [%s]\n", folder.id, getErrMsg());
             continue;
           }
           else
           {
-            if(!thisTask.addComment("Task completed by CompleteTaskAndMove.js: " + csvTextTaskCmpltnReason))
+            if(!thisTask.addComment("Task completed by CompleteTaskAndMove.js: " + taskInfo.text))
             {
               debug.log("ERROR", "Could not add comment to task with completion: [%s]\n", getErrMsg());
             }
 
-            printf("[%s] ID: [%s] - Completed [%s] with a reason of [%s]\n", curLineNum, folder.id, thisTask.id, csvTextTaskCmpltnReason);
-            debug.log("INFO","[%s] ID: [%s] - Completed [%s] with a reason of [%s]\n", curLineNum, folder.id, thisTask.id, csvTextTaskCmpltnReason);
+            printf("[%s] ID: [%s] - Completed [%s] with a reason of [%s]\n", curLineNum, folder.id, thisTask.id, taskInfo.text);
+            debug.log("INFO","[%s] ID: [%s] - Completed [%s] with a reason of [%s]\n", curLineNum, folder.id, thisTask.id, taskInfo.text);
             readyToRoute = true;
           }
         }// end of working current assigned task
@@ -511,7 +467,7 @@ function processByCSV()
             debug.log("ERROR","Failed to add [%s] to destination queue: [%s]\n", folder.id, getErrMsg());
             continue;
           }
-          if(!RouteItem(wfFolder[0].id, desQueue, "CTaM: " + csvTextTaskCmpltnReason + " to " + desQueue))
+          if(!RouteItem(wfFolder[0].id, desQueue, "CTaM: " + taskInfo.text + " to " + desQueue))
           {
             debug.log("ERROR","Failed to route [%s]: [%s]\n", folder.id, getErrMsg());
             continue;
@@ -528,7 +484,6 @@ function processByCSV()
       }// end of task processing for current folder
    } // ens of while
   Clib.fclose(fp);
-
 } // END OF PROCESS BY CSV
 
 //this funciton gets the number of lines in the csv
@@ -553,5 +508,41 @@ function countLines(csvName)
   return lineNum;
 }//end countLines
 
+//this function will return the latest task
+function getLatestTask(taskHash, taskArray, tmpltChk)
+{
+  for (var m = 0; m<taskArray.length; m++)
+  {
+    //if we've got the right template and the task is assigned
+    if((taskArray[m].taskTemplateID == tmpltChk) && (taskArray[m].state == "Assigned"))
+    {
+      //if this task's creation time is greater than the previous greatest time
+      if(taskArray[m].creationTime > taskHash.creationTime)
+      {
+        taskHash.id = taskArray[m].id;
+        taskHash.taskTemplateID = taskArray[m].taskTemplateID;
+        taskHash.creationTime = taskArray[m].creationTime;
+      }//end if this task's creation time is greater than the previous greatest time
+    }//end if we've got the right template and the task is assigned
+  }//end for each task in array
 
+  return taskHash;
+}//end function to return the latest task
+
+//this function will validate that an element exists in an array
+function validateElement(itemHash,itemArr,item)
+{
+  for (var i=0; i<itemArr.length; i++)
+  {
+    if(itemArr[i].text == item)
+    {
+      itemHash.id = itemArr[i].id;
+      itemHash.text = itemArr[i].text;
+      itemHash.flag = true;
+      break;
+    }
+  }// end of getting the task reason ID
+  return itemHash;
+}
+//end function to check to see if item is in array
 //

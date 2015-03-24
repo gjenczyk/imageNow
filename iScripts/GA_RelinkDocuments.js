@@ -11,50 +11,6 @@
                
         Mod Summary:
                Date-Initials: Modification description.
-
-               QUERY FOR EASY MODS:
-
-SELECT val1.doc_id, 
-val2.prop_name,
-val2.string_val,
-val1.string_val
-FROM 
-(SELECT INUSER.IN_DOC.DOC_ID,
-  INUSER.IN_DRAWER.DRAWER_NAME,
-  INUSER.IN_PROP.PROP_NAME,
-  INUSER.IN_INSTANCE_PROP.STRING_VAL
-FROM INUSER.IN_DOC
-INNER JOIN INUSER.IN_DRAWER
-ON INUSER.IN_DRAWER.DRAWER_ID = INUSER.IN_DOC.DRAWER_ID
-INNER JOIN INUSER.IN_INSTANCE
-ON INUSER.IN_DOC.INSTANCE_ID = INUSER.IN_INSTANCE.INSTANCE_ID
-INNER JOIN INUSER.IN_INSTANCE_PROP
-ON INUSER.IN_INSTANCE.INSTANCE_ID = INUSER.IN_INSTANCE_PROP.INSTANCE_ID
-INNER JOIN INUSER.IN_PROP
-ON INUSER.IN_PROP.PROP_ID   = INUSER.IN_INSTANCE_PROP.PROP_ID
-WHERE INUSER.IN_DOC.DOC_ID <> '321YYC6_062WSRGVE00001P'
-AND INUSER.IN_DRAWER.DRAWER_NAME IN ('UMBGA','UMBGA Lockbox')
-AND INUSER.IN_DOC.FOLDER                = '01559762'
-AND INUSER.IN_INSTANCE.DELETION_STATUS <> 1
-AND PROP_NAME = 'SA Application Nbr') val1
-full outer JOIN 
-(SELECT INUSER.IN_DOC.DOC_ID,
-INUSER.IN_DRAWER.DRAWER_NAME,
-INUSER.IN_PROP.PROP_NAME,
-INUSER.IN_INSTANCE_PROP.STRING_VAL
-FROM INUSER.IN_DOC
-INNER JOIN INUSER.IN_DRAWER
-ON INUSER.IN_DRAWER.DRAWER_ID = INUSER.IN_DOC.DRAWER_ID
-INNER JOIN INUSER.IN_INSTANCE
-ON INUSER.IN_INSTANCE.INSTANCE_ID = INUSER.IN_DOC.INSTANCE_ID 
-INNER JOIN INUSER.IN_INSTANCE_PROP
-ON INUSER.IN_INSTANCE.INSTANCE_ID = INUSER.IN_INSTANCE_PROP.INSTANCE_ID 
-INNER JOIN INUSER.IN_PROP 
-ON INUSER.IN_INSTANCE_PROP.PROP_ID = INUSER.IN_PROP.PROP_ID
-WHERE INUSER.IN_DRAWER.DRAWER_NAME LIKE 'UMBGA%'
-AND INUSER.IN_DOC.FOLDER = '01559762'  
-AND PROP_NAME = 'Shared') val2 
-on val1.doc_id = val2.doc_id;
                
 ********************************************************************************/
 
@@ -125,9 +81,7 @@ function main ()
             // build trigger doc type name & determine error queue
             var relinkTrigger = DOC_TYPE + campus;
             var errorQueue = UM + campus + ERR_QUEUE;
-            var triggerCreator = wfItem.creationUserName;
-            var otherThing = wfItem.stateUserName;
-            debug.log("DEBUG","stateUserName = [%s]\n", otherThing);
+            var triggerCreator = wfItem.stateUserName;
             var recycleQueue = UM + campus + COMPLETE_QUEUE;
 
 			      var wfDoc = new INDocument(wfItem.objectId);
@@ -332,7 +286,7 @@ function main ()
                   targetCPName = targetCustProps[tp].name;
                   targetCPVal = targetCustProps[tp].getValue();
 
-                  //debug.log("INFO","Target CP Name & Value [%s] [%s]\n", targetCustProps[tp].name, targetCustProps[tp].getValue());
+                  debug.log("INFO","Target CP Name & Value [%s] [%s]\n", targetCustProps[tp].name, targetCustProps[tp].getValue());
                   //printf(""Target CP Name & Value [%s] [%s]\n", targetCustProps[tp].name, targetCustProps[tp].getValue());
                   
 
@@ -386,7 +340,7 @@ function main ()
                   targetCPName = targetCustProps[tp].name;
                   targetCPVal = targetCustProps[tp].getValue();
 
-                  //debug.log("INFO","Target CP Name & Value [%s] [%s]\n", targetCustProps[tp].name, targetCustProps[tp].getValue());
+                  debug.log("INFO","Target CP Name & Value [%s] [%s]\n", targetCustProps[tp].name, targetCustProps[tp].getValue());
 
                   for (var a in driverPropArrray)
                   {

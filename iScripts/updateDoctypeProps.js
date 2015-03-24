@@ -105,7 +105,7 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
           //If we're adding or removing
           if ((CP_ADD_OK.value || CP_REMOVE_OK.value) && DOCTYPE_OK.value)
           {
-            debug.log("INFO","Working the [%s] doctype.\n",workingDocType.name);
+            debug.log("INFO","*--------------------Working the [%s] doctype--------------------*\n",workingDocType.name);
             //get info aobut the doctype
             var docType = new INDocType();
             var propArr = [];
@@ -224,16 +224,12 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
             if(CP_REMOVE_OK.value)
             {
               debug.log("INFO","Removing CPs from [%s]\n",docType.name);
-              for (var l = 0; l < propArr.length; l++)
+              
+              // go back out and re-run with new array
+              for (var m = 0; m < cpsToRemove.length; m++)
               {
-                for (var m = 0; m < cpsToRemove.length; m++)
-                {
-                  if(propArr[l].name == cpsToRemove[m].name)
-                  {
-                    propArr.splice(l,1);
-                  }
-                }
-              }//end for (var l = 0; l < propArr.length; l++)
+                propArr = removeFromArray(propArr, cpsToRemove);
+              } // proparr will now have all configured CPs removed
 
               if (!updateDoc(docType,propArr))
               {
@@ -487,5 +483,22 @@ function addToList(dtInfo)
   }
   return true;
 }//end function to add a doctype to a list
+
+function removeFromArray(docCPArray, removeCPArray)
+{
+  for (var l = 0; l < docCPArray.length; l++)
+  {
+    for (var m = 0; m < removeCPArray.length; m++)
+    {
+      //debug.log("DEBUG","propArr[%s] is [%s and cpsToRemove[%s] is [%s]\n", l, docCPArray[l].name, m, removeCPArray[m].name);
+      if(docCPArray[l].name == removeCPArray[m].name)
+      {
+        docCPArray.splice(l,1);
+        return docCPArray;
+      }
+    }
+  }
+  return docCPArray;
+}
 
 //
