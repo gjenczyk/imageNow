@@ -13,7 +13,7 @@
                   
 #
 # VERSION HISTORY
-# 1.0 2014.04.18 Initial Version.
+# 1.0 2015.04.06 Initial Version.
 #
 # TO ADD:
 # 
@@ -23,14 +23,14 @@
 
 Param(
     [string] $emplid,
-    [string] $docId
-)
+    [string] $docId,
+    [string] $docType,
+    [string] $seqNum)
 
 #-- INCLUDES --#
 . "D:\inserver6\script\PowerShell\sendmail.ps1"
 
 #-- CONFIG --#
-
 $localRoot = "D:\"
 $root = "D:\inserver6\"
 $env = ([environment]::MachineName).Substring(2)
@@ -44,18 +44,19 @@ $returnCode = 0;
 $webBaseDir = "D:\inserver6\output\"
 $webimgDir = "${webBaseDir}${emplid}\${docId}\"
 $completeDir = "${webBaseDir}complete\${emplid}"
-$expDir = "\\DIDEV67WEBRPT01\D$\INMAC\tiffExport\${emplid}\"
-$mergeDir = "\\DIDEV67WEBRPT01\D$\INMAC\tiffExport\${emplid}\${docId}\"
-$tiffcp = "\\DIDEV67WEBRPT01\D$\Program Files (x86)\GnuWin32\bin\tiffcp.exe"
-$tiff2pdf = "\\DIDEV67WEBRPT01\D$\Program Files (x86)\GnuWin32\bin\tiff2pdf.exe"
+$expDir = "\\DI${env}WEBRPT01\D$\INMAC\tiffExport\${emplid}\"
+$mergeDir = "\\DI${env}WEBRPT01\D$\INMAC\tiffExport\${emplid}\${docId}\"
+$tiffcp = "\\DI${env}WEBRPT01\D$\Program Files (x86)\GnuWin32\bin\tiffcp.exe"
+$tiff2pdf = "\\DI${env}WEBRPT01\D$\Program Files (x86)\GnuWin32\bin\tiff2pdf.exe"
 
 #- LOGGING -#
-$runLog = "${root}log\run_log-${scriptName}.log"
+$runLog = "${root}log\run_log-${scriptName}_${logDate}.log"
 
 #-- MAIN --#
 "$(get-date) - Starting ${scriptName} Script" | Out-File $runLog -Append
 "WEBRPT SERVER = ${convServ}" | Out-File $runLog -Append
-Enter-PSSession -ComputerName $convServ -Authentication NegotiateWithImplicitCredential
+#Enter-PSSession -ComputerName $convServ -Authentication NegotiateWithImplicitCredential
+$session = New-PSSession $convServ -Authentication NegotiateWithImplicitCredential
 try {
     if(-Not $(Test-Path ${mergeDir}))
     {
@@ -126,7 +127,7 @@ try {
     {
         New-Item -Path ${completeDir} -ItemType directory
     }
-    Move-Item -Path $pdfOut -Destination ${completeDir}
+    Move-Item -Path $pdfOut -Destination "${completeDir}\${docType}_${seqNum}.pdf"
     Remove-Item -Path ${expDir} -Recurse
 }
 catch [system.exception]{
@@ -135,13 +136,15 @@ catch [system.exception]{
 }
 finally
 {
-    Exit-PSSession
+    Remove-PSSession -Session $session
+    #Exit-PSSession
+    "$?"
 }
 #cleanup
 Get-ChildItem $webimgDir -File | ForEach-Object {
-     Remove-Item $_.FullName
+     #Remove-Item $_.FullName
 }
-Remove-Item "${webBaseDir}${emplid}\" -Recurse
+#Remove-Item "${webBaseDir}${emplid}\" -Recurse
 
 $error[0] | Out-File $runLog -Append
 "$(get-date) - Finishing ${scriptName} Script`n Returned: ${returnCode}" | Out-File $runLog -Append
