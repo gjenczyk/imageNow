@@ -28,7 +28,7 @@ Param(
     [string] $seqNum)
 
 #-- INCLUDES --#
-. "D:\inserver6\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
 
 #-- CONFIG --#
 $localRoot = "D:\"
@@ -137,14 +137,12 @@ catch [system.exception]{
 finally
 {
     Remove-PSSession -Session $session
-    #Exit-PSSession
-    "$?"
 }
 #cleanup
 Get-ChildItem $webimgDir -File | ForEach-Object {
-     #Remove-Item $_.FullName
+     Remove-Item $_.FullName
 }
-#Remove-Item "${webBaseDir}${emplid}\" -Recurse
+Remove-Item "${webBaseDir}${emplid}\" -Recurse
 
 $error[0] | Out-File $runLog -Append
 "$(get-date) - Finishing ${scriptName} Script`n Returned: ${returnCode}" | Out-File $runLog -Append

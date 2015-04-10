@@ -1,5 +1,5 @@
 ﻿<# #############################################################################
-# NAME: mergeTiffs.ps1
+# NAME: mergePDFs.ps1
 # 
 # AUTHOR:  Gregg Jenczyk, UMass (UITS)
 # DATE:  2015/04/06
@@ -27,7 +27,7 @@ Param(
     )
 
 #-- INCLUDES --#
-. "D:\inserver6\script\PowerShell\sendmail.ps1"
+. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
 
 #-- CONFIG --#
 $localRoot = "D:\"
@@ -53,17 +53,24 @@ $runLog = "${root}log\run_log-${scriptName}_${logDate}.log"
 #Enter-PSSession -ComputerName $convServ -Authentication NegotiateWithImplicitCredential
 $session = New-PSSession $convServ -Authentication NegotiateWithImplicitCredential
 try {
-    $inputString = ""
-    ForEach ($item in $path)
+    if($path.Length -lt 2)
     {
-        $inputString += "`"${item}`" "
+        "No need to merge: ${path}" | Out-File $runLog -Append
     }
-    $mergedDoc = "${webimgDir}${name}.pdf"
-    & $gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -o ${mergedDoc} $inputString
-    #cleanup
-    ForEach ($item in $path)
+    else
     {
-        Remove-Item -Path $item
+        $inputString = ""
+        ForEach ($item in $path)
+        {
+            $inputString += "`"${item}`" "
+        }
+        $mergedDoc = "${webimgDir}${name}.pdf"
+        & $gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -o ${mergedDoc} $inputString
+        #cleanup
+        ForEach ($item in $path)
+        {
+            Remove-Item -Path $item
+        }
     }
 }
 catch [system.exception]{

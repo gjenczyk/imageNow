@@ -27,6 +27,7 @@
 #include "$IMAGENOWDIR6$\\script\\lib\\csvObject.jsh"
 #include "$IMAGENOWDIR6$\\script\\lib\\GetUniqueF5DateTime.js"
 #include "$IMAGENOWDIR6$\\script\\lib\\GetProp.jsh"
+#include "$IMAGENOWDIR6$\\script\\lib\\envVariable.jsh"
 
 // *********************         Configuration        *******************
 
@@ -44,7 +45,7 @@
 var POWERSHELL_ROOT = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
 var POWERSHELL_MERGE_TIFF = imagenowDir6+"\\script\\PowerShell\\mergeTiffs.ps1"
 var POWERSHELL_MERGE_PDF = imagenowDir6+"\\script\\PowerShell\\mergePDFs.ps1"
-
+var POWERSHELL_EMAIL_PDF = imagenowDir6+"\\script\\PowerShell\\emailPdfs.ps1"
 /**
 * Main body of script.
 * @method main
@@ -157,12 +158,23 @@ var POWERSHELL_MERGE_PDF = imagenowDir6+"\\script\\PowerShell\\mergePDFs.ps1"
         return false;
       }
 
-/*      if(emailFlag) // ------------------- This isn't going to work if we're going by profile sheet
+      //if we are configured to send an email
+      if(emailFlag) 
       {
         //use this if we're going to be emailing stuff to someone...
         var routerEmail = getRouterEmail(wfItem.queueStartUserName);
-      }
-*/ 
+        if(!routerEmail || routerEmail == null)
+        {
+          debug.log("ERROR","Could not send email - no address found.\n");
+        }
+        else
+        {
+          //send the email
+          sendPDF(routerEmail, exportList, doc);
+        }
+      }//end if(emailFlag)
+      
+      //if we are configured to import a document
       if(importFlag)
       {
         var revDoc = createNewDoc(doc, exportList, pdfDocType);
@@ -173,7 +185,9 @@ var POWERSHELL_MERGE_PDF = imagenowDir6+"\\script\\PowerShell\\mergePDFs.ps1"
         }
       }//end if(importFlag)
 
-    }
+      //clean up files
+      cleanUpServer(exportList);
+    }//end main
         
     catch(e)
     {
@@ -252,9 +266,9 @@ function findDocsToSend(emplid, drawer, appNo, usedType, skipType)
         "ON INUSER.IN_PROP.PROP_ID  = INUSER.IN_INSTANCE_PROP.PROP_ID " +
         "WHERE INUSER.IN_DOC.FOLDER = '" + emplid + "' " +
         "AND INUSER.IN_DRAWER.DRAWER_NAME LIKE '" + drawer + "%' " +
-        "AND ((INUSER.IN_PROP.PROP_NAME         = 'SA Application Nbr' " +
+        "AND ((INUSER.IN_PROP.PROP_NAME = 'SA Application Nbr' " +
         "AND INUSER.IN_INSTANCE_PROP.STRING_VAL = '" + appNo + "') " +
-        "OR (INUSER.IN_PROP.PROP_NAME           = 'Shared' " +
+        "OR (INUSER.IN_PROP.PROP_NAME = 'Shared' " +
         "AND INUSER.IN_INSTANCE_PROP.STRING_VAL = '301YT7N_000CFJ25Y0000NX')) " +
         "AND INUSER.IN_DOC_TYPE_LIST.LIST_NAME IN (" + usedType + ") " +
         "MINUS " +
@@ -456,7 +470,6 @@ function createNewDoc(docObj, expFiles, docObjType)
   {
     debug.log("INFO","Working file [%s] = [%s]\n",j, expFiles[j].name);
     var parts = SElib.splitFilename(expFiles[j].name);
-    printf(parts.name+"\n");
     var workingPdf = parts.name + parts.ext;
     var attr = new Array;
     attr["phsob.file.type"] = parts.ext;
@@ -472,14 +485,8 @@ function createNewDoc(docObj, expFiles, docObjType)
     else
     {
       debug.log("INFO","Successfully imported logobID: %s.\n", logob.id);
-      //delete the pdf from the server
-      Clib.remove(expFiles[j].name);
     }
   }//end of for each pdf
-
-  //remove the export directory
-  Clib.rmdir(filePath)
-  debug.log("INFO","Removed [%s]\n",filePath);
 
   //return the newly created doc object
   return pdfDoc;
@@ -502,6 +509,7 @@ function popKeys(docObj, docObjType)
 //this isn't the way to do it because this is driven by the profile sheet.
 function getRouterEmail(lastUser)
 {
+  debug.log("DEBUG","Looking for email address for [%s].\n", lastUser);
   //collect information about who routed the document into the queue
   var router = new INUser(lastUser);
   if(!router.getInfo())
@@ -518,7 +526,41 @@ function getRouterEmail(lastUser)
   var emailAddr = router.email;
   //fun fact - manager users don't have email addresses in the system.
   return emailAddr;
-}
+}//end getRouterEmail
+
+//function to send the pdf via email
+function sendPDF(address, attachment, docObj)
+{
+    debug.log("DEBUG","Sending email to [%s]\n", address);
+    var attch = [];
+    for(var e = 0; e < attachment.length; e++)
+    {
+      attch.push("'" + attachment[e].name + "'");
+    }
+    var cmd = "";
+    Clib.sprintf(cmd, '%s %s %s %s %s %s', POWERSHELL_ROOT, POWERSHELL_EMAIL_PDF, address, attch, docObj.field1, "'" + docObj.field2 + "'");
+    var rtn = exec(cmd, 0);
+    return rtn;
+}//end sendPDF
+
+//function to clean up leftover files
+function cleanUpServer(filesObj)
+{
+  debug.log("INFO","Cleaning up files after process.\n");
+  var baseDir = "";
+  for (var b = 0; b < filesObj.length; b ++)
+  {
+    var parts = SElib.splitFilename(filesObj[b].name);
+    baseDir = parts.dir;
+    //delete the pdf from the server
+    Clib.remove(filesObj[b].name);
+    debug.log("INFO","Removed [%s]\n",filesObj[b].name);
+  }
+  //remove the export directory
+  Clib.rmdir(baseDir)
+  debug.log("INFO","Removed [%s]\n",baseDir);
+}//end cleanUpServer
+
 
 //this function passes a command to the command line and returns the exit code (if it's defined!)
 function exec(cmd, expected_return)
