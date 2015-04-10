@@ -1,0 +1,28 @@
+EXPORT_CONFIG:
+ - SCRIPT_Q: UMBGA Move Forward in Process
+   IN_PDF_DOC: Program Review BGA
+   TRIGGER: Profile Sheet
+   TYPES_TO_INCLUDE: [UMB Graduate Admissions, UMB Graduate Admissions Lockbox]
+   TYPES_TO_EXCLUDE: [UMB Graduate Admissions Exclude]
+   DOCTYPE_ORDER: UMB Graduate Admissions Order
+   SINGLE_FILE: true
+   EMAIL_OUTPUT: true
+   IMPORT_OUTPUT: true
+ - SCRIPT_Q: UMDGA Move Forward in Process
+   IN_PDF_DOC: Program Review DGA
+   TRIGGER: Decision Sheet
+   TYPES_TO_INCLUDE: [UMD Graduate Admissions, UMD Graduate Admissions Lockbox]
+   TYPES_TO_EXCLUDE: [UMD Graduate Admissions Exclude]
+   DOCTYPE_ORDER: UMD Graduate Admissions Order
+   SINGLE_FILE: false
+   EMAIL_OUTPUT: true
+   IMPORT_OUTPUT: false
+ - SCRIPT_Q: UMLGA Move Forward in Process
+   IN_PDF_DOC: Program Review LGA
+   TRIGGER: Profile Sheet
+   TYPES_TO_INCLUDE: [UML Graduate Admissions, UML Graduate Admissions Lockbox]
+   TYPES_TO_EXCLUDE: [UML Graduate Admissions Exclude]
+   DOCTYPE_ORDER: UML Graduate Admissions Order
+   SINGLE_FILE: true
+   EMAIL_OUTPUT: true
+   IMPORT_OUTPUT: true

@@ -1,0 +1,6 @@
+CTaM_CONFIG:
+ - SOURCE_QUEUE: Predictive Admit (LUA Predictive Decisions)
+   ERROR_QUEUE: LUA Decision Ready Error
+   TASK_TEMPLATE: Predictive Decision Required LUA
+   TASK_REASON: Admit
+   DESTINATION_QUEUE: LUA Communications Admit

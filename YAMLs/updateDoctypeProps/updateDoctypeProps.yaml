@@ -1,0 +1,14 @@
+DOCTYPE_CONFIG:
+ - DOCTYPE_TO_UPDATE:
+   DOC_INFO:
+    - name: Degree Certificate (Official)
+      create: false
+   CPS_TO_REMOVE:
+    - name: Plan
+    - name: Plan Code
+    - name: Program
+    - name: Program Code
+    - name: SA Application Nbr
+    - name: Sub-Plan
+    - name: Sub-Plan Code
+    - name: Term Code

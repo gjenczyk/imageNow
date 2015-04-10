@@ -1,0 +1,3 @@
+PROCESS_CONFIG:
+ - FOLDER_TYPE: Verification Documents
+   PROCESS_QUEUE: Ready to Be Verified
