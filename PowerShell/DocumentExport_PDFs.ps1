@@ -36,13 +36,13 @@ $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
 $convServ = "DI${env}WEBRPT01"
 $logDate = $(get-date -format 'yyyyMMdd')
-$scriptName = "mergePDFs" #change this here - no extension
+$scriptName = "DocumentExport_PDFs" #change this here - no extension
 $returnCode = 0;
 
 #-- WORKING PATHS --#
 $webBaseDir = "D:\inserver6\output\complete\"
 $webimgDir = "${webBaseDir}${name}\"
-$gs = "\\DI${env}WEBRPT01\D$\\Program Files\gs\gs9.16\bin\gswin64c.exe"
+$gs = "\\DI${env}WEBRPT01\D$\\Program Files\gs\gs9.14\bin\gswin64c.exe"
 
 #- LOGGING -#
 $runLog = "${root}log\run_log-${scriptName}_${logDate}.log"
@@ -80,8 +80,7 @@ catch [system.exception]{
 finally
 {
     Remove-PSSession -Session $session
+    $error[0] | Out-File $runLog -Append
+    "$(get-date) - Finishing ${scriptName} Script`n Returned: ${returnCode}" | Out-File $runLog -Append
+    [Environment]::Exit($returnCode)
 }
-
-$error[0] | Out-File $runLog -Append
-"$(get-date) - Finishing ${scriptName} Script`n Returned: ${returnCode}" | Out-File $runLog -Append
-[Environment]::Exit($returnCode)

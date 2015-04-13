@@ -38,7 +38,7 @@ $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
 $convServ = "DI${env}WEBRPT01"
 $logDate = $(get-date -format 'yyyyMMdd')
-$scriptName = "emailPDFs" #change this here - no extension
+$scriptName = "DocumentExport_email" #change this here - no extension
 $returnCode = 0;
 
 #- LOGGING -#

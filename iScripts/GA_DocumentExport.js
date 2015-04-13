@@ -43,9 +43,9 @@
 // ********************* Initialize global variables ********************
 
 var POWERSHELL_ROOT = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
-var POWERSHELL_MERGE_TIFF = imagenowDir6+"\\script\\PowerShell\\mergeTiffs.ps1"
-var POWERSHELL_MERGE_PDF = imagenowDir6+"\\script\\PowerShell\\mergePDFs.ps1"
-var POWERSHELL_EMAIL_PDF = imagenowDir6+"\\script\\PowerShell\\emailPdfs.ps1"
+var POWERSHELL_MERGE_TIFF = imagenowDir6+"\\script\\PowerShell\\DocumentExport_tiffs.ps1"
+var POWERSHELL_MERGE_PDF = imagenowDir6+"\\script\\PowerShell\\DocumentExport_PDFs.ps1"
+var POWERSHELL_EMAIL_PDF = imagenowDir6+"\\script\\PowerShell\\DocumentExport_email.ps1"
 /**
 * Main body of script.
 * @method main
@@ -86,6 +86,7 @@ var POWERSHELL_EMAIL_PDF = imagenowDir6+"\\script\\PowerShell\\emailPdfs.ps1"
         var exportConfig = CFG.GA_DocumentExport[office].EXPORT_CONFIG;
         for (var i = 0; i < exportConfig.length ; i++)
         {
+          debug.log("DEBUG","exportConfig[i].SCRIPT_Q == [%s]\n",exportConfig[i].SCRIPT_Q)
           if (exportConfig[i].SCRIPT_Q == queueName)
           {
             docTypesUsed = exportConfig[i].TYPES_TO_INCLUDE;
@@ -230,6 +231,7 @@ var POWERSHELL_EMAIL_PDF = imagenowDir6+"\\script\\PowerShell\\emailPdfs.ps1"
 //quotes and seperated by a comma
 function prepareTypeLists(typeArray)
 {
+  debug.log("DEBUG","Inside prepareTypeLists.\n");
   var sqlString = "";
   for (var t = 0; t < typeArray.length; t++)
   {
@@ -247,6 +249,7 @@ function prepareTypeLists(typeArray)
 //function to get list of documents that can be added to the pdf
 function findDocsToSend(emplid, drawer, appNo, usedType, skipType)
 {
+  debug.log("DEBUG","Inside findDocsToSend.\n");
   sql = "SELECT DISTINCT(INUSER.IN_DOC.DOC_ID), " +
         "INUSER.IN_DOC_TYPE.DOC_TYPE_NAME " +
         "FROM INUSER.IN_DOC " +
@@ -302,6 +305,7 @@ function findDocsToSend(emplid, drawer, appNo, usedType, skipType)
 //function that sends each row from the query results to the export function
 function processMatchingDocs(curObj)
 {
+  debug.log("DEBUG","Inside processMatchingDocs.\n");
   var count = 0;
   while(curObj.next())
   {
@@ -326,9 +330,10 @@ function processMatchingDocs(curObj)
 //function that extracts the tiffs from the doc and converts them to a single pdf
 function exportDoc(doc, seq)
 {
+  debug.log("DEBUG","Inside exportDoc.\n");
   //make an output dir for the applicant's info because for some damn reason perceptive won't create a dir 2 deep
   //sorry, it's lexmark now
-  var exportDir = imagenowDir6+"\\output\\"+doc.field1+"\\";//+doc.id+"\\";
+  var exportDir = "D:\\inserver6\\output\\"+doc.field1+"\\";//+doc.id+"\\";
   Clib.mkdir(exportDir);
   if(!exportDocPhsOb(doc,exportDir + "\\"+doc.id+"\\","ALL","ALL",true))
   {
@@ -350,13 +355,19 @@ function exportDoc(doc, seq)
 //function to get the sort order for the documents defined in the sort order list
 function retrieveSortOrder(listType)
 {
+  debug.log("DEBUG","Inside retrieveSortOrder.\n");
   var dtList = new INDocTypeList("",listType);
   dtList.getInfo();
   var dtArray = dtList.members;
   var strTypeArray = [];
+  debug.log("DEBUG","dtArray.length = [%s]\n", dtArray.length);
   for(var l = 0; l < dtArray.length; l++)
   {
       strTypeArray.push(dtArray[l].name);
+  }
+  for(var l = 0; l < strTypeArray.length; l++)
+  {
+      debug.log("DEBUG","strTypeArray = [%s]\n", strTypeArray[l]);
   }
   //return the sort order, if there is one
   return strTypeArray;
@@ -366,9 +377,10 @@ function retrieveSortOrder(listType)
 //this funciton will also merge the pdfs if only one pdf is desired
 function getExportedFiles(docObj, docSortArr, singleDoc)
 {
+  debug.log("DEBUG","Inside getExportedFiles.\n");
   var filePath = "D:\\inserver6\\output\\complete\\" + docObj.field1 + "\\";
   var pdfImports = SElib.directory(filePath + "*");
-
+  debug.log("DEBUG","docSortArr.length = [%s]\n", docSortArr.length);
   //sort the files if there is a sort list
   if (docSortArr.length > 0)
   {
@@ -393,14 +405,21 @@ function getExportedFiles(docObj, docSortArr, singleDoc)
 //if doctypes are not on the list, they are added at the end of the array FCFS
 function orderExports(dirObj, order)
 {
+  debug.log("DEBUG","Inside orderExports.\n");
   var orderedArray = [];
   //add the docs on the list to the the array according to the order
+  debug.log("DEBUG","order.length = [%s]\n", order.length);
   for(var p = 0; p < order.length; p++)
   {
+    debug.log("DEBUG","dirObj.length = [%s]\n", dirObj.length);
     for (var o = 0; o < dirObj.length; o++)
-    {
+    {      
       var parts = SElib.splitFilename(dirObj[o].name);
-      if(order[p].indexOf(parts.name.slice(0, -2)) == 0)
+      var trimPt = parts.name.lastIndexOf("_");
+      debug.log("DEBUG","trimPt = [%s]\n", trimPt);
+      debug.log("DEBUG","parts.name.substring(0, trimPt) = [%s]\n", parts.name.substring(0, trimPt));
+      debug.log("DEBUG","order[p] = [%s]\n", order[p]);
+      if(order[p].indexOf(parts.name.substring(0, trimPt)) == 0)
       {
         orderedArray.push(dirObj[o]);
       }
@@ -408,8 +427,10 @@ function orderExports(dirObj, order)
   }//end of adding the ordered docs
 
   //remove the already-added docs from the remaining docs
+  debug.log("DEBUG","orderedArray.length = [%s]\n", orderedArray.length);
   for (var q = 0; q < orderedArray.length; q++)
   {
+    debug.log("DEBUG","orderedArray[q] = [%s]\n", orderedArray[q]);
     dirObj = removeFromArray(orderedArray[q], dirObj);
   }
 
@@ -426,6 +447,7 @@ function orderExports(dirObj, order)
 //function to remove items from an array, since iScrip doesn't have array.indexOf()
 function removeFromArray(element, arr)
 {
+  debug.log("DEBUG","Inside removeFromArray.\n");
   for (var q = 0; q < arr.length; q++)
   {
     if(element.name == arr[q].name)
@@ -441,6 +463,7 @@ function removeFromArray(element, arr)
 //function to merge multiple pdfs into one
 function mergePdfs(pdfPath, pdfName)
 {
+  debug.log("DEBUG","Inside mergePdfs.\n");
   var cmd = "";
   Clib.sprintf(cmd, '%s %s %s %s', POWERSHELL_ROOT, POWERSHELL_MERGE_PDF, pdfPath, pdfName);
   var rtn = exec(cmd, 0);
@@ -450,6 +473,7 @@ function mergePdfs(pdfPath, pdfName)
 //function to create the document back in imageNow
 function createNewDoc(docObj, expFiles, docObjType)
 {
+  debug.log("DEBUG","Inside createNewDoc.\n");
   //where the pdfs are
   var filePath = "D:\\inserver6\\output\\complete\\" + docObj.field1 + "\\";
   var pdfKeys = popKeys(docObj, docObjType);
@@ -495,6 +519,7 @@ function createNewDoc(docObj, expFiles, docObjType)
 //make the keys for the new doc with a new linkDate/Time
 function popKeys(docObj, docObjType)
 {
+  debug.log("DEBUG","Inside popKeys.\n");
   //set create time
   var linkDate_obj = new GetUniqueF5DateTime(true);
 
@@ -509,7 +534,7 @@ function popKeys(docObj, docObjType)
 //this isn't the way to do it because this is driven by the profile sheet.
 function getRouterEmail(lastUser)
 {
-  debug.log("DEBUG","Looking for email address for [%s].\n", lastUser);
+  debug.log("INFO","Looking for email address for [%s].\n", lastUser);
   //collect information about who routed the document into the queue
   var router = new INUser(lastUser);
   if(!router.getInfo())
@@ -531,16 +556,16 @@ function getRouterEmail(lastUser)
 //function to send the pdf via email
 function sendPDF(address, attachment, docObj)
 {
-    debug.log("DEBUG","Sending email to [%s]\n", address);
-    var attch = [];
-    for(var e = 0; e < attachment.length; e++)
-    {
-      attch.push("'" + attachment[e].name + "'");
-    }
-    var cmd = "";
-    Clib.sprintf(cmd, '%s %s %s %s %s %s', POWERSHELL_ROOT, POWERSHELL_EMAIL_PDF, address, attch, docObj.field1, "'" + docObj.field2 + "'");
-    var rtn = exec(cmd, 0);
-    return rtn;
+  debug.log("DEBUG","Sending email to [%s]\n", address);
+  var attch = [];
+  for(var e = 0; e < attachment.length; e++)
+  {
+    attch.push("'" + attachment[e].name + "'");
+  }
+  var cmd = "";
+  Clib.sprintf(cmd, '%s %s %s %s %s %s', POWERSHELL_ROOT, POWERSHELL_EMAIL_PDF, address, attch, docObj.field1, "'" + docObj.field2 + "'");
+  var rtn = exec(cmd, 0);
+  return rtn;
 }//end sendPDF
 
 //function to clean up leftover files
