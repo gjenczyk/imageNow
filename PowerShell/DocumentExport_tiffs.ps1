@@ -58,13 +58,19 @@ try {
     Get-ChildItem ${webimgDir}* -File | ForEach-Object {
         $baseName = $_.BaseName
         $extension = $_.Extension
-        #Handling for the backwards tiffs
+        #Handling assorted orientation issues
         $origFile = $_.FullName
+        "Working $origFile @ $(get-date)" | Out-File $runLog -Append
         $props = @(& $IMI -verbose $origFile)
         if ($props -contains "  Orientation: LeftBottom")
         {
-           #"Flipping ${origFile}" #| Out-File $runLog -Append
+           #"Flopping ${origFile}" #| Out-File $runLog -Append
            & $IMC -auto-orient $origFile -flop $origFile
+        }
+        if ($props -contains "  Orientation: RightTop")
+        {
+            #"Flipping ${origFile}" #| Out-File $runLog -Append
+            & $IMC -auto-orient $origFile -flip $origFile
         }
         $renArr = [regex]::split($baseName,'_') 
         $uniqueId = "$($renArr[0])_$($renArr[1])"
@@ -76,7 +82,7 @@ try {
         }
         $mergeFile = "${webimgDir}${uniqueId}${extension}"
         #"MERGE FILE: ${mergeFile}" | Out-File $runLog -Append
-        $pdfOut = "${webimgDir}$($renArr[0])_$($renArr[1]).PDF"
+        $pdfOut = "${webimgDir}$($renArr[0])_$($renArr[1]).pdf"
         #"PDF: $pdfOut" | Out-File $runLog -Append
         Rename-Item $_ -NewName "${pageNo}_${uniqueId}${extension}"
     }
@@ -109,7 +115,10 @@ try {
        $sourceFiles += "`"${webimgDir}$($sortedArr[$j])`" "
     }
 
-    & $IMC $sourceFiles -adjoin $pdfOut
+    #& $IMC $sourceFiles -adjoin $pdfOut
+    "Merging tiffs at $(get-date)" | Out-File $runLog -Append
+    & $IMC $sourceFiles -gravity northwest -pointsize 48 -stroke '#000C' -strokewidth 2 -annotate 0 $docType -pointsize 48 -stroke  none -fill white -annotate 0 $doctype -adjoin $pdfOut
+    "Finished merging tiffs at $(get-date)" | Out-File $runLog -Append
     for ($k = 0; $k -lt $sortedArr.Length; $k++)
     {
        Remove-Item -Path "${webimgDir}$($sortedArr[$k])"
@@ -119,7 +128,7 @@ try {
     {
         New-Item -Path ${completeDir} -ItemType directory
     }
-    Move-Item -Path $pdfOut -Destination "${completeDir}\${docType}_${seqNum}.PDF"
+    Move-Item -Path $pdfOut -Destination "${completeDir}\${docType}_${seqNum}.pdf"
 }
 catch [system.exception]{
     $error[0] | Out-File $runLog -Append

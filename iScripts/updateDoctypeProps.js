@@ -11,8 +11,35 @@
                
         Mod Summary:
                Date-Initials: Modification description.
-
-
+               
+EXAMPLE YAML CONFIG:
+--------------------
+DOCTYPE_CONFIG:
+ - DOCTYPE_TO_UPDATE:
+   DOC_INFO:
+    - name: Doctype1
+      create: false
+  CPD_TO_ADD:
+   - name: CustProp1
+     position: 2
+   - name: CustProp2
+     position:
+   - name: CustProp3
+  CPS_TO_REMOVE:
+   - name: CustProp4
+ - DOCTYPE_TO_UPDATE:
+   DOC_INFO:
+    - name: Doctype2
+      create: true
+      list: DocTypeList1
+  CPS_TO_ADD:
+   - name: CustProp1
+   - name: CustProp4
+ - DOCTYPE_TO_UPDATE:
+   DOC_INFO:
+    - name: Doctype3
+   CPS_TO_REMOVE:
+    - name: CustProp9
 
 ********************************************************************************/
 

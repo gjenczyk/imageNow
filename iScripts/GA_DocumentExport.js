@@ -358,6 +358,7 @@ function retrieveSortOrder(listType)
   debug.log("DEBUG","Inside retrieveSortOrder.\n");
   var dtList = new INDocTypeList("",listType);
   dtList.getInfo();
+  debug.log("DEBUG","Checking list: [%s]\n",dtList.name);
   var dtArray = dtList.members;
   var strTypeArray = [];
   debug.log("DEBUG","dtArray.length = [%s]\n", dtArray.length);
