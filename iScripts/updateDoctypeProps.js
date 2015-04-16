@@ -218,26 +218,38 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
               for (var g = 0; g < insLen; g++)
               {
                 debug.log("DEBUG","Adding: [%s] [%s]\n",cpsToAdd[g].position,cpsToAdd[g].name)
+                propb = new INProperty();
+                propb.name = cpsToAdd[g].name;
+                propb.getInfo();
                 var propa = [];
                 propa[0] = new INClassProp();
+                propa[0].id = propb.id;
                 propa[0].name = cpsToAdd[g].name;
                 propa[0].isRequired  = false;
                 propArr.splice(cpsToAdd[g].position,0,propa[0]);
               }//end for (var g = 0; g < insLen; g++)
 
               //lastly, make sure we're not inserting a value that is already there
-              var arrToCheck = propArr.sort();
+        
+              var arrToCheck = propArr.sort(function compare(a,b) {if (a.id < b.id)return -1;if (a.id > b.id)return 1;return 0;});
               var dupCheck = arrToCheck.length;
 
+              var dupErr = false;
               while(dupCheck > 1)
               {
                 dupCheck--;
                 if(arrToCheck[dupCheck].name == arrToCheck[dupCheck-1].name)
                 {
-                  debug.log("ERROR","Attempted to insert same CP twice! CP: [%s].  Check config and rerun!\n",arrToCheck[dupCheck].name);
-                  return false;
+                  debug.log("ERROR","Attempted to insert same CP twice! CP: [%s].\n",arrToCheck[dupCheck].name);
+                  dupErr = true;
                 }
               } //end while(dupCheck > 1)
+
+              if(dupErr)
+              {
+                debug.log("ERROR","Duplicate CPs were detected.  Please fix configuration and re-run. Be sure to remove configuration for documents that have already been processed.\n")
+                retrun false;
+              }
 
               if (!updateDoc(docType,propArr))
               {
@@ -437,13 +449,27 @@ function updateDoc(docType1, propArr1)
     debug.log("DEBUG","NEW DOCTYPE PROPS: id:%s, name:%s, isRequired:%s \n",propArr1[m].id, propArr1[m].name, propArr1[m].isRequired);
   }
 
+  /*debug.log("DEBUG","docType1.name = [%s]\n", docType1.name);
+  debug.log("DEBUG","docType1.desc = [%s]\n", docType1.desc);
+  debug.log("DEBUG","docType1.isActive = [%s]\n", docType1.isActive);
+  debug.log("DEBUG","propArr1 = [%s]\n", propArr1);
+  for(var p = 0; var p < propArr1.length; p++)
+  {
+    debug.log("DEBUG","ID:             %s\n", propArr1[p].id);
+    debug.log("DEBUG","name:           %s\n", propArr1[p].name);
+    debug.log("DEBUG","type:           %s\n", propArr1[p].type);
+    debug.log("DEBUG","defaultValue:   %s\n", propArr1[p].defaultValue);
+    debug.log("DEBUG","displayFormat   %s\n", propArr1[p].displayFormat);
+    debug.log("DEBUG","isActive:       %s\n", propArr1[p].isActive);
+  }*/
+  debug.log("DEBUG","Attempting to update [%s]. This may take some time....\n", docType1.name);
   if(docType1.update(docType1.name, docType1.desc, docType1.isActive, 0, propArr1))
   {
     debug.log("INFO","Successfully updated document type [%s].\n", docType1.name);
   } 
   else
   {
-    debug.log("ERROR","Aborting - Failed to update document type - %s\n.", getErrMsg());
+    debug.log("ERROR","Aborting - Failed to update document type - %s.\n", getErrMsg());
     return false;
   }
   return true;
@@ -513,6 +539,7 @@ function addToList(dtInfo)
 
 function removeFromArray(docCPArray, removeCPArray)
 {
+  debug.log("DEBUG","Inside removeFromArray.\n");
   for (var l = 0; l < docCPArray.length; l++)
   {
     for (var m = 0; m < removeCPArray.length; m++)
@@ -526,6 +553,6 @@ function removeFromArray(docCPArray, removeCPArray)
     }
   }
   return docCPArray;
-}
+}//end removeFromArray
 
 //
