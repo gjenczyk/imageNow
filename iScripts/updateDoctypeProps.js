@@ -85,6 +85,11 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
       debug.log("INFO","Attempting to load YAML\n");
       loadYAMLConfig(imagenowDir6+"\\script\\config_scripts\\updateDoctypeProps\\");
 
+      //hold the original CP configs
+      var origCPs = [];
+      var completedProcessing = false;
+
+      //go through each doctype in config
       for (var docTypeConfig in CFG.updateDoctypeProps)
       { 
         debug.log("DEBUG","Begin processing UDTP configuration\n");
@@ -119,6 +124,7 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
           if (!checkConfig(workingDocType, cpsToAdd, cpsToRemove))
           {
             debug.log("ERROR","One or more configured items are not valid.\n");
+            rollbackUpdates(origCPs, completedProcessing);
             return false;
           }// end if (!checkCPConfig())
 
@@ -127,6 +133,7 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
           if((!CP_ADD_OK.value && !CP_REMOVE_OK.value)|| !DOCTYPE_OK.value)
           {
             debug.log("ERROR","There is nothing to update!\n");
+            rollbackUpdates(origCPs, completedProcessing);
             return false;
           }
           //If we're adding or removing
@@ -142,6 +149,13 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
               debug.log("DEBUG","Doctype id:%s, name:%s, desc:%s, isActive:%s\n", docType.id, docType.name, docType.desc, docType.isActive);
               var props = docType.props;
               debug.log("DEBUG","Number of custom properties: %d\n",props.length);
+
+              //save original prop config
+              var origVal = [];
+              var origVal[0] = docType.id;
+              var origVal[1] = props;
+              origCPs.push(origVal);
+              
               for (b=0; b<props.length; b++)
               {
                 debug.log("INFO","EXISTING DOCTYPE PROPS: id:%s, name:%s, isRequired:%s \n",props[b].id, props[b].name, props[b].isRequired);
@@ -152,6 +166,7 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
             {
               //create it here if we want to do that?
               debug.log("ERROR","Failed to retrieve info for document type - Error: [%s]\n", getErrMsg());
+              rollbackUpdates(origCPs, completedProcessing);
               return false;
             }//end if (docType.getInfo()) else
 
@@ -162,6 +177,7 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
                 if(!addToList(workingDocType))
                 {
                   debug.log("ERROR","Could not add [%s] to [%s]. Check config and rerun!\n",workingDocType.name, workingDocType.list);
+                  rollbackUpdates(origCPs, completedProcessing);
                   return false;
                 }
                 else
@@ -184,7 +200,7 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
               for (var f = 0; f < insLen; f++)
               {
                 //set position if we have a bad value.
-                if(!parseInt(cpsToAdd[f].position) || !cpsToAdd[f].position || cpsToAdd[f].position == null)
+                if(((!parseInt(cpsToAdd[f].position) || !cpsToAdd[f].position) && cpsToAdd[f].position != 0) || cpsToAdd[f].position === null)
                 {
                   debug.log("WARNING","Passed bad value for position: [%s] position: [%s]\n",cpsToAdd[f].name, cpsToAdd[f].position);
                   cpsToAdd[f].position = propLen + posMod;
@@ -217,24 +233,17 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
               //insert the values in the array
               for (var g = 0; g < insLen; g++)
               {
-                debug.log("DEBUG","Adding: [%s] [%s]\n",cpsToAdd[g].position,cpsToAdd[g].name)
-                propb = new INProperty();
-                propb.name = cpsToAdd[g].name;
-                propb.getInfo();
-                var propa = [];
-                propa[0] = new INClassProp();
-                propa[0].id = propb.id;
-                propa[0].name = cpsToAdd[g].name;
-                propa[0].isRequired  = false;
-                propArr.splice(cpsToAdd[g].position,0,propa[0]);
+                propArr = insertIntoArray(propArr, cpsToAdd[g]);
               }//end for (var g = 0; g < insLen; g++)
 
               //lastly, make sure we're not inserting a value that is already there
-        
-              var arrToCheck = propArr.sort(function compare(a,b) {if (a.id < b.id)return -1;if (a.id > b.id)return 1;return 0;});
+              //we need to do it this way because it messes up the order of propArr otherwise
+              var sortingArr = propArr.slice(0);
+              var arrToCheck = sortingArr.sort(function compare(a,b) {if (a.id < b.id)return -1;if (a.id > b.id)return 1;return 0;});
               var dupCheck = arrToCheck.length;
-
               var dupErr = false;
+
+              //check the sorted array to make sure that there are no identical values
               while(dupCheck > 1)
               {
                 dupCheck--;
@@ -247,14 +256,20 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
 
               if(dupErr)
               {
-                debug.log("ERROR","Duplicate CPs were detected.  Please fix configuration and re-run. Be sure to remove configuration for documents that have already been processed.\n")
-                retrun false;
+                debug.log("ERROR","Duplicate CPs were detected.  Please fix configuration and re-run.\n");
+                rollbackUpdates(origCPs, completedProcessing);
+                return false;
               }
 
               if (!updateDoc(docType,propArr))
               {
                 debug.log("ERROR","Could not update doctype [%s]\n",docType.name);
+                rollbackUpdates(origCPs, completedProcessing);
                 return false;
+              }
+              else
+              {
+                completedProcessing = true;
               }
 
             }//end if adding values
@@ -273,7 +288,12 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
               if (!updateDoc(docType,propArr))
               {
                 debug.log("ERROR","Could not update doctype [%s]\n",docType.name);
+                rollbackUpdates(origCPs, completedProcessing);
                 return false;
+              }
+              else
+              {
+                completedProcessing = true;
               }
             }//end if removing values
           }//if (CP_ADD_OK || CP_REMOVE_OK) 
@@ -449,19 +469,7 @@ function updateDoc(docType1, propArr1)
     debug.log("DEBUG","NEW DOCTYPE PROPS: id:%s, name:%s, isRequired:%s \n",propArr1[m].id, propArr1[m].name, propArr1[m].isRequired);
   }
 
-  /*debug.log("DEBUG","docType1.name = [%s]\n", docType1.name);
-  debug.log("DEBUG","docType1.desc = [%s]\n", docType1.desc);
-  debug.log("DEBUG","docType1.isActive = [%s]\n", docType1.isActive);
-  debug.log("DEBUG","propArr1 = [%s]\n", propArr1);
-  for(var p = 0; var p < propArr1.length; p++)
-  {
-    debug.log("DEBUG","ID:             %s\n", propArr1[p].id);
-    debug.log("DEBUG","name:           %s\n", propArr1[p].name);
-    debug.log("DEBUG","type:           %s\n", propArr1[p].type);
-    debug.log("DEBUG","defaultValue:   %s\n", propArr1[p].defaultValue);
-    debug.log("DEBUG","displayFormat   %s\n", propArr1[p].displayFormat);
-    debug.log("DEBUG","isActive:       %s\n", propArr1[p].isActive);
-  }*/
+  //say this so people don't worry if the log appears to stop
   debug.log("DEBUG","Attempting to update [%s]. This may take some time....\n", docType1.name);
   if(docType1.update(docType1.name, docType1.desc, docType1.isActive, 0, propArr1))
   {
@@ -537,6 +545,7 @@ function addToList(dtInfo)
   return true;
 }//end function to add a doctype to a list
 
+//funciton 
 function removeFromArray(docCPArray, removeCPArray)
 {
   debug.log("DEBUG","Inside removeFromArray.\n");
@@ -554,5 +563,53 @@ function removeFromArray(docCPArray, removeCPArray)
   }
   return docCPArray;
 }//end removeFromArray
+
+function rollbackUpdates(updtArr, updtFlag)
+{
+  debug.log("DEBUG","Inside rollbackUpdates.\n");
+  if(updtFlag)
+  {
+    //undo stuff
+    debug.log("INFO","Preparing to roll back updates.\n")
+    for(var u = 0; u < updtArr.length; u++)
+    {
+      var rDoc = new INDocType (updtArr[u][0]);
+      rDoc.getInfo();
+      debug.log("INFO","Rolling back updates to [%s] configuration.\n", rDoc.name);
+      if(!rDoc.update(rDoc.name, rDoc.desc, rDoc.isActive, 0, updtArr[u][1]))
+      {
+        debug.log("ERROR","Could not undo updates for [%s]! ERROR: [%s]\n",rDoc.name, getErrMsg());
+      }
+      else
+      {
+        debug.log("INFO","Successfully rolled back to initial configuration for [%s]\n", rDoc.name);
+      }
+    }
+  }
+  else
+  {
+    //nothing to undo
+    debug.log("INFO","No documents were updated - no need to roll back.\n");
+  }
+}
+
+function insertIntoArray(newArr, cpObj)
+{
+  debug.log("DEBUG","Adding: [%s] [%s]\n",cpObj.position,cpObj.name)
+  //initialize a property and get it's ID
+  propb = new INProperty();
+  propb.name = cpObj.name;
+  propb.getInfo();
+  //prepare the property to be passed to the array
+  var propa = [];
+  propa[0] = new INClassProp();
+  propa[0].id = propb.id;
+  propa[0].name = cpObj.name;
+  propa[0].isRequired  = false;
+
+  newArr.splice(cpObj.position,0,propa[0]);
+
+  return newArr;
+}
 
 //
