@@ -6,7 +6,7 @@
 # EMAIL: gjenczyk@umassp.edu
 # 
 # COMMENT:  This script sucks up tiffs put out by an iScript, merges them,
-            converts them to PDF and passes them back to 
+            converts them to a single file and passes them back to 
 
     INSTRUCTIONS: NEED TO TUNR ON WINRM AND ADD HOSTA TO HOSTB's TRUSTED HOSTS
                   ON EACH SERVER!!!
@@ -23,12 +23,14 @@
 
 Param(
     [string] $emplid,
+    [string] $appno,
     [string] $docId,
     [string] $docType,
-    [string] $seqNum)
+    [string] $seqNum,
+    [string] $outFormat)
 
 #-- INCLUDES --#
-. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
+. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
 
 #-- CONFIG --#
 $localRoot = "D:\"
@@ -42,37 +44,39 @@ $returnCode = 0;
 
 #-- WORKING PATHS --#
 $webBaseDir = "D:\inserver6\output\"
-$webimgDir = "${webBaseDir}${emplid}\${docId}\"
-$completeDir = "${webBaseDir}complete\${emplid}"
-$IMC = "D:\ImageMagick\convert.exe"
-$IMI = "D:\ImageMagick\identify.exe"
+$webimgDir = "${webBaseDir}${emplid}_${appno}\${docId}\"
+$completeDir = "${webBaseDir}complete\${emplid}_${appno}"
+$IMC = "D:\Program Files\ImageMagick\convert.exe"
+$IMI = "D:\\Program Files\ImageMagick\identify.exe"
 
 #- LOGGING -#
 $runLog = "${root}log\run_log-${scriptName}_${logDate}.log"
 
 #-- MAIN --#
+#"THIS : $emplid $appno $docId $docType $seqNum"| Out-File $runLog -Append
 "$(get-date) - Starting ${scriptName} Script" | Out-File $runLog -Append
 try {
     $mergeFile = ""
-    $pdfOut = ""
+    $fileOut = ""
     Get-ChildItem ${webimgDir}* -File | ForEach-Object {
         $baseName = $_.BaseName
         $extension = $_.Extension
         #Handling assorted orientation issues
         $origFile = $_.FullName
         "Working $origFile @ $(get-date)" | Out-File $runLog -Append
-        $props = @(& $IMI -verbose $origFile)
-        if ($props -contains "  Orientation: LeftBottom")
+        $props = @(& $IMI -format "%[orientation]" $origFile)
+        if ($props -contains "LeftBottom")
         {
-           #"Flopping ${origFile}" #| Out-File $runLog -Append
-           & $IMC -auto-orient $origFile -flop $origFile
+            "Flopping ${origFile} @ $(get-date)" | Out-File $runLog -Append
+            & $IMC -auto-orient $origFile -flop $origFile
         }
-        if ($props -contains "  Orientation: RightTop")
+        if ($props -contains "RightTop")
         {
-            #"Flipping ${origFile}" #| Out-File $runLog -Append
+            "Flipping ${origFile} @ $(get-date)" | Out-File $runLog -Append
             & $IMC -auto-orient $origFile -flip $origFile
         }
-        $renArr = [regex]::split($baseName,'_') 
+        $renArr = [regex]::split($baseName,'_')
+        #"0 = $($renArr[0]) 1= $($renArr[1]) 2 = $($renArr[2])" | Out-File $runLog -Append
         $uniqueId = "$($renArr[0])_$($renArr[1])"
         $pageNo = $renArr[2]
         #handle single page exports
@@ -82,8 +86,8 @@ try {
         }
         $mergeFile = "${webimgDir}${uniqueId}${extension}"
         #"MERGE FILE: ${mergeFile}" | Out-File $runLog -Append
-        $pdfOut = "${webimgDir}$($renArr[0])_$($renArr[1]).pdf"
-        #"PDF: $pdfOut" | Out-File $runLog -Append
+        $fileOut = "${webimgDir}$($renArr[0])_$($renArr[1]).${outFormat}"
+        #"OUT: $fileOut" | Out-File $runLog -Append
         Rename-Item $_ -NewName "${pageNo}_${uniqueId}${extension}"
     }
 
@@ -115,9 +119,9 @@ try {
        $sourceFiles += "`"${webimgDir}$($sortedArr[$j])`" "
     }
 
-    #& $IMC $sourceFiles -adjoin $pdfOut
+    #& $IMC $sourceFiles -adjoin $fileOut
     "Merging tiffs at $(get-date)" | Out-File $runLog -Append
-    & $IMC $sourceFiles -gravity northwest -pointsize 48 -stroke '#000C' -strokewidth 2 -annotate 0 $docType -pointsize 48 -stroke  none -fill white -annotate 0 $doctype -adjoin $pdfOut
+    & $IMC $sourceFiles -gravity northwest -pointsize 48 -stroke '#000C' -strokewidth 2 -annotate 0 $docType -pointsize 48 -stroke  none -fill white -annotate 0 $doctype -adjoin $fileOut
     "Finished merging tiffs at $(get-date)" | Out-File $runLog -Append
     for ($k = 0; $k -lt $sortedArr.Length; $k++)
     {
@@ -128,10 +132,11 @@ try {
     {
         New-Item -Path ${completeDir} -ItemType directory
     }
-    Move-Item -Path $pdfOut -Destination "${completeDir}\${docType}_${seqNum}.pdf"
+    #"fileOUt = $fileOut and destination= ${completeDir}\${docType}_${seqNum}.${outFormat}" | Out-File $runLog -Append
+    Move-Item -Path $fileOut -Destination "${completeDir}\${docType}_${seqNum}.${outFormat}"
 }
 catch [system.exception]{
-    $error[0] | Out-File $runLog -Append
+    $error[0] | Format-List -Force | Out-File $runLog -Append
     $returnCode = 1;
 }
 finally
@@ -140,9 +145,9 @@ finally
     Get-ChildItem $webimgDir -File | ForEach-Object {
         Remove-Item $_.FullName
     }
-    Remove-Item "${webBaseDir}${emplid}\" -Recurse
+    Remove-Item "${webBaseDir}${emplid}_${appno}\" -Recurse
 
-    $error[0] | Out-File $runLog -Append
+    $error[0] | Format-List -Force | Out-File $runLog -Append
     "$(get-date) - Finishing ${scriptName} Script`n Returned: ${returnCode}" | Out-File $runLog -Append
     [Environment]::Exit($returnCode)
 }

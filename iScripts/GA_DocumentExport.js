@@ -6,9 +6,9 @@
         For Version:    
 ---------------------------------------------------------------------------------
         Summary:
-               This script will convert documents for an applicant to one or more 
-               pdfs.
-               
+               This script will convert documents for an applicant a single file.
+               2.0 - Security has been applied so the pdfs can't be printed
+               3.0 - Output can be tiff for extra security               
         Mod Summary:
                Date-Initials: Modification description.
 
@@ -37,15 +37,14 @@
 #define SPLIT_LOG_BY_THREAD false   // set to true in high volume scripts when multiple worker threads are used (workflow, external message agent, etc)
 #define MAX_LOG_FILE_SIZE   100     // Maximum size of log file (in MB) before a new one will be created
 
-
 // *********************       End  Configuration     *******************
 
 // ********************* Initialize global variables ********************
 
 var POWERSHELL_ROOT = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
 var POWERSHELL_MERGE_TIFF = imagenowDir6+"\\script\\PowerShell\\DocumentExport_tiffs.ps1"
-var POWERSHELL_MERGE_PDF = imagenowDir6+"\\script\\PowerShell\\DocumentExport_PDFs.ps1"
-var POWERSHELL_EMAIL_PDF = imagenowDir6+"\\script\\PowerShell\\DocumentExport_email.ps1"
+var POWERSHELL_MERGE_DOC = imagenowDir6+"\\script\\PowerShell\\DocumentExport_files.ps1"
+var POWERSHELL_EMAIL_DOC = imagenowDir6+"\\script\\PowerShell\\DocumentExport_email.ps1"
 /**
 * Main body of script.
 * @method main
@@ -58,136 +57,51 @@ var POWERSHELL_EMAIL_PDF = imagenowDir6+"\\script\\PowerShell\\DocumentExport_em
       debug = new iScriptDebug("GA_DocumentExport", LOG_TO_FILE, DEBUG_LEVEL);
       debug.log("WARNING", "GA_DocumentExport script started.\n");
 
-      //get informaiton about the current wf item
-      var wfItem = new INWfItem(currentWfItem.id);//"321YZ49_06Y84KJ6000000M");//
-      if(!wfItem.id || !wfItem.getInfo())
+      if(typeof(currentWfItem) == "undefined")
       {
-        debug.log("CRITICAL", " Couldn't get info for wfItem: %s\n", getErrMsg());
-        return false;
-      }
-
-      //get queue name
-      var queueName = wfItem.queueName;
-
-      //store the results from the yaml here
-      var docTypesUsed = [];
-      var docTypesNotUsed = [];
-      var docTypeOrder = "";
-      var pdfDocType = "";
-      var trigger = "";
-      var emailFlag = false;
-      var importFlag = false;
-      var singleDoc = false;
-
-      //identify the correct doctype list to use for exporting in the yaml
-      loadYAMLConfig(imagenowDir6+"\\script\\config_scripts\\GA_DocumentExport\\");
-      for (var office in CFG.GA_DocumentExport)
-      {
-        var exportConfig = CFG.GA_DocumentExport[office].EXPORT_CONFIG;
-        for (var i = 0; i < exportConfig.length ; i++)
+        debug.log("NOTIFY","Running GA_DocumentExport as an intool action\n");
+        var docListPath = "D:\\inserver6\\script\\docs.csv"
+        var fp = Clib.fopen(docListPath, "r");
+        if (fp == null)
         {
-          debug.log("DEBUG","exportConfig[i].SCRIPT_Q == [%s]\n",exportConfig[i].SCRIPT_Q)
-          if (exportConfig[i].SCRIPT_Q == queueName)
-          {
-            docTypesUsed = exportConfig[i].TYPES_TO_INCLUDE;
-            docTypesNotUsed = exportConfig[i].TYPES_TO_EXCLUDE;
-            docTypeOrder = exportConfig[i].DOCTYPE_ORDER;
-            pdfDocType = exportConfig[i].IN_PDF_DOC;
-            trigger = exportConfig[i].TRIGGER;
-            emailFlag = exportConfig[i].EMAIL_OUTPUT;
-            importFlag = exportConfig[i].IMPORT_OUTPUT;
-            singleDoc = exportConfig[i].SINGLE_FILE;
-            break;
-          }
-        }
-      }//end checking the yaml for the list
-
-      //get out if we can't find a list in the config
-      if((!docTypesUsed || docTypesUsed == null) || (!docTypesNotUsed || docTypesNotUsed == null) || (!pdfDocType || pdfDocType == null) || (!trigger || trigger == null))
-      {
-        debug.log("ERROR","Invalid config for [%s] - docTypesUsed:[%s] pdfDocType:[%s] pdfDocQCfg:[%s]\n",queueName, docTypesUsed, pdfDocType, trigger);
-        return false;
-      }
-
-      //get information about inbound doc
-      var doc = new INDocument(wfItem.objectId);//"301YY4P_04VZ7RN4N0142XW");  
-      if(!doc.getInfo())
-      {
-          debug.log("ERROR","Couldn't get doc info: [%s]\n",getErrMsg()); 
-          return false;
-      }
-
-      //check to make sure that the document is the correct type for pdf generation
-      if(!(doc.docTypeName == trigger))
-      {
-        debug.log("INFO","Current doc: [%s] is not the correct type for pdf generation: [%s]\n", doc.docTypeName, trigger);
-        return false;
-      }
-
-      //get information for the query
-      var useDocs = prepareTypeLists(docTypesUsed);
-      var skipDocs = prepareTypeLists(docTypesNotUsed);
-      var saAppNo = GetProp(doc, "SA Application Nbr");
-   
-      //get a list of documents to send
-      var docList = findDocsToSend(doc.field1, doc.drawer, saAppNo, useDocs, skipDocs);
-      if (!docList || docList == null)
-      {
-        debug.log("ERROR","Couln't find exportable documents for [%s] in [%s] and [%s]\n",doc.field1, doc.drawer, docTypeList);
-        return false;
-      }
-
-      //export all documents returned by the query
-      if(!processMatchingDocs(docList))
-      {
-        debug.log("ERROR","Unable to export all documents.\n");
-        return false;
-      }
-
-      //get the documents that need to go at the front of the pdf
-      var sortOrder = retrieveSortOrder(docTypeOrder);
-      if(!sortOrder || sortOrder == null)
-      {
-        debug.log("INFO","No configured order for pdf.\n");
-      }
-
-      //get the list of exported files
-      var exportList = getExportedFiles(doc, sortOrder, singleDoc);
-      if(!exportList || exportList == null)
-      {
-        debug.log("ERROR","Unable to get list of exported files!\n");
-        return false;
-      }
-
-      //if we are configured to send an email
-      if(emailFlag) 
-      {
-        //use this if we're going to be emailing stuff to someone...
-        var routerEmail = getRouterEmail(wfItem.queueStartUserName);
-        if(!routerEmail || routerEmail == null)
-        {
-          debug.log("ERROR","Could not send email - no address found.\n");
+          debug.log("ERROR","Could not read [%s] - [%s]\n", docListPath, getErrMsg());
         }
         else
         {
-          //send the email
-          sendPDF(routerEmail, exportList, doc);
+           while ( null != (line=Clib.fgets(fp)) )
+           {
+              Clib.fputs(line, stdout)
+              var tstID = line.substring(0,line.length-1);
+              printf(tstID);
+              var curDocObj = new INDocument(tstID);
+              //get informaiton about the current object
+              if(!curDocObj.getInfo())
+              {
+                debug.log("CRITICAL","Failed to get info for [%s] : [%s]\n", tstID, getErrMsg());
+                return false;
+              }
+              else
+              {
+                documentExport_intool(curDocObj);
+              }      
+          }
+
+          Clib.fclose(fp);
         }
-      }//end if(emailFlag)
-      
-      //if we are configured to import a document
-      if(importFlag)
+      }
+      else
       {
-        var revDoc = createNewDoc(doc, exportList, pdfDocType);
-        if(!revDoc || revDoc == null)
+        debug.log("NOTIFY","Running GA_DocumentExport as an inbound action\n");
+        //get informaiton about the current wf item
+        var wfItem = new INWfItem(currentWfItem.id);//"321YZ48_06Y23JJFR00003S");//
+        if(!wfItem.id || !wfItem.getInfo())
         {
-          debug.log("ERROR","Unable to create the pdf document.\n");
+          debug.log("CRITICAL", " Couldn't get info for wfItem: %s\n", getErrMsg());
           return false;
         }
-      }//end if(importFlag)
 
-      //clean up files
-      cleanUpServer(exportList);
+        documentExportWF(wfItem);
+      }
     }//end main
         
     catch(e)
@@ -226,6 +140,239 @@ var POWERSHELL_EMAIL_PDF = imagenowDir6+"\\script\\PowerShell\\DocumentExport_em
 }
 
 // ********************* Function Definitions **********************************
+//this function will do the conversion for inbound docs
+function documentExportWF(wfObj)
+{
+  //get queue name
+      var queueName = wfObj.queueName;
+
+      //store the results from the yaml here
+      var docTypesUsed = [];
+      var docTypesNotUsed = [];
+      var docTypeOrder = "";
+      var singleDocType = "";
+      var trigger = "";
+      var emailFlag = false;
+      var importFlag = false;
+      var fileFormat = null;
+      var protectPdf = true;
+
+      //identify the correct doctype list to use for exporting in the yaml
+      loadYAMLConfig(imagenowDir6+"\\script\\config_scripts\\GA_DocumentExport\\");
+      for (var office in CFG.GA_DocumentExport)
+      {
+        var exportConfig = CFG.GA_DocumentExport[office].EXPORT_CONFIG;
+        for (var i = 0; i < exportConfig.length ; i++)
+        {
+          debug.log("DEBUG","exportConfig[i].SCRIPT_Q == [%s]\n",exportConfig[i].SCRIPT_Q)
+          if (exportConfig[i].SCRIPT_Q == queueName)
+          {
+            docTypesUsed = exportConfig[i].TYPES_TO_INCLUDE;
+            docTypesNotUsed = exportConfig[i].TYPES_TO_EXCLUDE;
+            docTypeOrder = exportConfig[i].DOCTYPE_ORDER;
+            singleDocType = exportConfig[i].IN_SINGLE_DOC;
+            trigger = exportConfig[i].TRIGGER;
+            emailFlag = exportConfig[i].EMAIL_OUTPUT;
+            importFlag = exportConfig[i].IMPORT_OUTPUT;
+            fileFormat = exportConfig[i].FILE_FORMAT;
+            protectPdf = exportConfig[i].PROTECT_PDF;
+            break;
+          }
+        }
+      }//end checking the yaml for the list
+
+      //get out if we can't find a list in the config
+      if((!docTypesUsed || docTypesUsed == null) || (!docTypesNotUsed || docTypesNotUsed == null) || (!singleDocType || singleDocType == null) || (!trigger || trigger == null))
+      {
+        debug.log("ERROR","Invalid config for [%s] - docTypesUsed:[%s] singleDocType:[%s] trigger:[%s]\n",queueName, docTypesUsed, singleDocType, trigger);
+        return false;
+      }
+
+      //get information about inbound doc
+      var doc = new INDocument(wfObj.objectId);//"301YY4P_04VZ7RN4N0142XW");  
+      if(!doc.getInfo())
+      {
+          debug.log("ERROR","Couldn't get doc info: [%s]\n",getErrMsg()); 
+          return false;
+      }
+
+      //check to make sure that the document is the correct type for generation
+      if(!(doc.docTypeName == trigger))
+      {
+        debug.log("INFO","Current doc: [%s] is not the correct type for generation: [%s]\n", doc.docTypeName, trigger);
+        return false;
+      }
+
+      //get information for the query
+      var useDocs = prepareTypeLists(docTypesUsed);
+      var skipDocs = prepareTypeLists(docTypesNotUsed);
+      var saAppNo = GetProp(doc, "SA Application Nbr");
+   
+      //get a list of documents to send
+      var docList = findDocsToSend(doc.field1, doc.drawer, saAppNo, useDocs, skipDocs);
+      if (!docList || docList == null)
+      {
+        debug.log("ERROR","Couln't find exportable documents for [%s] in [%s] and [%s]\n",doc.field1, doc.drawer, docTypeList);
+        return false;
+      }
+
+      //export all documents returned by the query
+      if(!processMatchingDocs(docList, saAppNo, fileFormat))
+      {
+        debug.log("ERROR","Unable to export all documents.\n");
+        return false;
+      }
+
+      //get the documents that need to go at the front of the export
+      var sortOrder = retrieveSortOrder(docTypeOrder);
+      if(!sortOrder || sortOrder == null)
+      {
+        debug.log("INFO","No configured order for export.\n");
+      }
+
+      //get the list of exported files
+      var exportList = getExportedFiles(doc, sortOrder, fileFormat, protectPdf, saAppNo);
+      if(!exportList || exportList == null)
+      {
+        debug.log("ERROR","Unable to get list of exported files!\n");
+        return false;
+      }
+
+      //if we are configured to send an email
+      if(emailFlag) 
+      {
+        //use this if we're going to be emailing stuff to someone...
+        var routerEmail = getRouterEmail(wfObj.queueStartUserName);
+        if(!routerEmail || routerEmail == null)
+        {
+          debug.log("ERROR","Could not send email - no address found.\n");
+        }
+        else
+        {
+          //send the email
+          sendFile(routerEmail, exportList, doc);
+        }
+      }//end if(emailFlag)
+
+      //if we are configured to import a document
+      if(importFlag)
+      {
+        var revDoc = createNewDoc(doc, exportList, singleDocType, saAppNo);
+        if(!revDoc || revDoc == null)
+        {
+          debug.log("ERROR","Unable to create the new document.\n");
+          return false;
+        }
+      }//end if(importFlag)
+
+      //clean up files
+      cleanUpServer(exportList);
+}//end documentExportWF
+
+//this function will convert docs via intool
+function documentExport_intool(doc)
+{
+  //get queue name
+      var queueName = doc.drawer + " intool";
+
+      //store the results from the yaml here
+      var docTypesUsed = [];
+      var docTypesNotUsed = [];
+      var docTypeOrder = "";
+      var singleDocType = "";
+      var trigger = "";
+      var emailFlag = false;
+      var importFlag = false;
+      var fileFormat = null;
+      var protectPdf = true;
+
+      //identify the correct doctype list to use for exporting in the yaml
+      loadYAMLConfig(imagenowDir6+"\\script\\config_scripts\\GA_DocumentExport\\");
+      for (var office in CFG.GA_DocumentExport)
+      {
+        var exportConfig = CFG.GA_DocumentExport[office].EXPORT_CONFIG;
+        for (var i = 0; i < exportConfig.length ; i++)
+        {
+          debug.log("DEBUG","exportConfig[i].SCRIPT_Q == [%s]\n",exportConfig[i].SCRIPT_Q)
+          if (exportConfig[i].SCRIPT_Q == queueName)
+          {
+            docTypesUsed = exportConfig[i].TYPES_TO_INCLUDE;
+            docTypesNotUsed = exportConfig[i].TYPES_TO_EXCLUDE;
+            docTypeOrder = exportConfig[i].DOCTYPE_ORDER;
+            singleDocType = exportConfig[i].IN_SINGLE_DOC;
+            trigger = exportConfig[i].TRIGGER;
+            emailFlag = exportConfig[i].EMAIL_OUTPUT;
+            importFlag = exportConfig[i].IMPORT_OUTPUT;
+            fileFormat = exportConfig[i].FILE_FORMAT;
+            protectPdf = exportConfig[i].PROTECT_PDF;
+            break;
+          }
+        }
+      }//end checking the yaml for the list
+
+      //get out if we can't find a list in the config
+      if((!docTypesUsed || docTypesUsed == null) || (!docTypesNotUsed || docTypesNotUsed == null) || (!singleDocType || singleDocType == null) || (!trigger || trigger == null))
+      {
+        debug.log("ERROR","Invalid config for [%s] - docTypesUsed:[%s] singleDocType:[%s] trigger:[%s]\n",queueName, docTypesUsed, singleDocType, trigger);
+        return false;
+      }
+
+      //check to make sure that the document is the correct type for generation
+      if(!(doc.docTypeName == trigger))
+      {
+        debug.log("INFO","Current doc: [%s] is not the correct type for generation: [%s]\n", doc.docTypeName, trigger);
+        return false;
+      }
+
+      //get information for the query
+      var useDocs = prepareTypeLists(docTypesUsed);
+      var skipDocs = prepareTypeLists(docTypesNotUsed);
+      var saAppNo = GetProp(doc, "SA Application Nbr");
+   
+      //get a list of documents to send
+      var docList = findDocsToSend(doc.field1, doc.drawer, saAppNo, useDocs, skipDocs);
+      if (!docList || docList == null)
+      {
+        debug.log("ERROR","Couln't find exportable documents for [%s] in [%s] and [%s]\n",doc.field1, doc.drawer, docTypeList);
+        return false;
+      }
+
+      //export all documents returned by the query
+      if(!processMatchingDocs(docList, saAppNo, fileFormat))
+      {
+        debug.log("ERROR","Unable to export all documents.\n");
+        return false;
+      }
+
+      //get the documents that need to go at the front of the export
+      var sortOrder = retrieveSortOrder(docTypeOrder);
+      if(!sortOrder || sortOrder == null)
+      {
+        debug.log("INFO","No configured order for export.\n");
+      }
+
+      //get the list of exported files
+      var exportList = getExportedFiles(doc, sortOrder, fileFormat, protectPdf, saAppNo);
+      if(!exportList || exportList == null)
+      {
+        debug.log("ERROR","Unable to get list of exported files!\n");
+        return false;
+      }
+
+      //if we are configured to import a document
+      if(importFlag)
+      {
+        var revDoc = createNewDoc(doc, exportList, singleDocType, saAppNo);
+        if(!revDoc || revDoc == null)
+        {
+          debug.log("ERROR","Unable to create the new document.\n");
+          return false;
+        }
+      }//end if(importFlag)
+
+      //clean up files
+      cleanUpServer(exportList);
+}//end documentExport_intool
 
 //this function turns an array into a string with each element enclosed in single
 //quotes and seperated by a comma
@@ -246,7 +393,7 @@ function prepareTypeLists(typeArray)
   return sqlString;
 }//end of prepareTypeLists
 
-//function to get list of documents that can be added to the pdf
+//function to get list of documents that can be added to the export
 function findDocsToSend(emplid, drawer, appNo, usedType, skipType)
 {
   debug.log("DEBUG","Inside findDocsToSend.\n");
@@ -268,6 +415,7 @@ function findDocsToSend(emplid, drawer, appNo, usedType, skipType)
         "INNER JOIN INUSER.IN_PROP " +
         "ON INUSER.IN_PROP.PROP_ID  = INUSER.IN_INSTANCE_PROP.PROP_ID " +
         "WHERE INUSER.IN_DOC.FOLDER = '" + emplid + "' " +
+        "AND INUSER.IN_INSTANCE.DELETION_STATUS <> '1' " +
         "AND INUSER.IN_DRAWER.DRAWER_NAME LIKE '" + drawer + "%' " +
         "AND ((INUSER.IN_PROP.PROP_NAME = 'SA Application Nbr' " +
         "AND INUSER.IN_INSTANCE_PROP.STRING_VAL = '" + appNo + "') " +
@@ -303,7 +451,7 @@ function findDocsToSend(emplid, drawer, appNo, usedType, skipType)
 }// end of findDocsToSend
 
 //function that sends each row from the query results to the export function
-function processMatchingDocs(curObj)
+function processMatchingDocs(curObj, appNo, fileFormat)
 {
   debug.log("DEBUG","Inside processMatchingDocs.\n");
   var count = 0;
@@ -317,7 +465,7 @@ function processMatchingDocs(curObj)
         return false;
     }
 
-    if(!exportDoc(tiffDoc, count))
+    if(!exportDoc(tiffDoc, count, appNo, fileFormat))
     {
       debug.log("ERROR","Could not export [%s]\n",tiffDoc.id);
       return false;
@@ -327,13 +475,13 @@ function processMatchingDocs(curObj)
   return true;
 }//end processMatchingDocs
 
-//function that extracts the tiffs from the doc and converts them to a single pdf
-function exportDoc(doc, seq)
+//function that extracts the tiffs from the doc and converts them to a single export
+function exportDoc(doc, seq, appNo, fileFormat)
 {
   debug.log("DEBUG","Inside exportDoc.\n");
   //make an output dir for the applicant's info because for some damn reason perceptive won't create a dir 2 deep
   //sorry, it's lexmark now
-  var exportDir = "D:\\inserver6\\output\\"+doc.field1+"\\";//+doc.id+"\\";
+  var exportDir = "D:\\inserver6\\output\\"+doc.field1+"_"+appNo+"\\";//+doc.id+"\\";
   Clib.mkdir(exportDir);
   if(!exportDocPhsOb(doc,exportDir + "\\"+doc.id+"\\","ALL","ALL",true))
   {
@@ -345,7 +493,14 @@ function exportDoc(doc, seq)
     var cmd = "";
     //windows' command line doesn't like spaces
     var safeSpace = "'" + doc.docTypeName + "'";
-    Clib.sprintf(cmd, '%s %s %s %s %s %s', POWERSHELL_ROOT, POWERSHELL_MERGE_TIFF, doc.field1, doc.id, safeSpace, seq);
+    debug.log("DEBUG","safeSpace is [%s]\n", safeSpace);
+    if(safeSpace.indexOf("&") > 0)
+    {
+      var pat = /(&)/g;
+      safeSpace = safeSpace.replace(pat, '"&"');
+      debug.log("DEBUG","safeSpace is now [%s]\n", safeSpace);
+    }
+    Clib.sprintf(cmd, '%s %s %s %s %s %s %s %s', POWERSHELL_ROOT, POWERSHELL_MERGE_TIFF, doc.field1, appNo, doc.id, safeSpace, seq, fileFormat);
     var rtn = exec(cmd, 0);
     //retrun the exit code
     return rtn;
@@ -375,31 +530,36 @@ function retrieveSortOrder(listType)
 }//end retrieveSortOrder
 
 //function that gets a list of the exported files and sorts them, if there is a sorting list
-//this funciton will also merge the pdfs if only one pdf is desired
-function getExportedFiles(docObj, docSortArr, singleDoc)
+function getExportedFiles(docObj, docSortArr, fileFormat, protect, appNo)
 {
   debug.log("DEBUG","Inside getExportedFiles.\n");
-  var filePath = "D:\\inserver6\\output\\complete\\" + docObj.field1 + "\\";
-  var pdfImports = SElib.directory(filePath + "*");
+  var filePath = "D:\\inserver6\\output\\complete\\" + docObj.field1 + "_" + appNo + "\\";
+  var newImports = SElib.directory(filePath + "*");
   debug.log("DEBUG","docSortArr.length = [%s]\n", docSortArr.length);
   //sort the files if there is a sort list
   if (docSortArr.length > 0)
   {
-    pdfImports = orderExports(pdfImports, docSortArr);
+    newImports = orderExports(newImports, docSortArr);
   }
   //merge the files if there should be only one
-  if(singleDoc)
-  {
+
     var pArray = [];
-    for(var i = 0; i < pdfImports.length; i++)
+    for(var i = 0; i < newImports.length; i++)
     {
-     pArray.push("'"+pdfImports[i].name+"'");
+     debug.log("DEBUG","newImports[i].name is [%s]\n", newImports[i].name);
+     if(newImports[i].name.indexOf("&") > 0)
+     {
+       var pat = /(&)/g;
+       newImports[i].name = newImports[i].name.replace(pat, '"&"');
+       debug.log("DEBUG","newImports[i].name is now [%s]\n", newImports[i].name);
+     }
+     pArray.push("'"+newImports[i].name+"'");
     }
-    var merged = mergePdfs(pArray, docObj.field1);
-    pdfImports = SElib.directory(filePath + "*");
-  }
+    var merged = mergeDocs(pArray, docObj.field1, appNo, fileFormat, protect);
+    newImports = SElib.directory(filePath + "*");
+  
   //return the list of files
-  return pdfImports;
+  return newImports;
 }//end getExportedFiles
 
 //function to sort the files according to an doctype list.
@@ -417,9 +577,9 @@ function orderExports(dirObj, order)
     {      
       var parts = SElib.splitFilename(dirObj[o].name);
       var trimPt = parts.name.lastIndexOf("_");
-      debug.log("DEBUG","trimPt = [%s]\n", trimPt);
-      debug.log("DEBUG","parts.name.substring(0, trimPt) = [%s]\n", parts.name.substring(0, trimPt));
-      debug.log("DEBUG","order[p] = [%s]\n", order[p]);
+      //debug.log("DEBUG","trimPt = [%s]\n", trimPt);
+      //debug.log("DEBUG","parts.name.substring(0, trimPt) = [%s]\n", parts.name.substring(0, trimPt));
+      //debug.log("DEBUG","order[p] = [%s]\n", order[p]);
       if(order[p].indexOf(parts.name.substring(0, trimPt)) == 0)
       {
         orderedArray.push(dirObj[o]);
@@ -461,47 +621,47 @@ function removeFromArray(element, arr)
   return arr;
 }//end removeFromArray
 
-//function to merge multiple pdfs into one
-function mergePdfs(pdfPath, pdfName)
+//function to merge multiple files into one
+function mergeDocs(docPath, docName, appNo, fileFormat, protect)
 {
-  debug.log("DEBUG","Inside mergePdfs.\n");
+  debug.log("DEBUG","Inside mergeDocs.\n");
   var cmd = "";
-  Clib.sprintf(cmd, '%s %s %s %s', POWERSHELL_ROOT, POWERSHELL_MERGE_PDF, pdfPath, pdfName);
+  Clib.sprintf(cmd, '%s %s %s %s %s %s %s', POWERSHELL_ROOT, POWERSHELL_MERGE_DOC, docPath, docName, appNo, fileFormat, protect);
   var rtn = exec(cmd, 0);
   return rtn;
-}//end mergePdfs
+}//end mergeDocs
 
 //function to create the document back in imageNow
-function createNewDoc(docObj, expFiles, docObjType)
+function createNewDoc(docObj, expFiles, docObjType, appNo)
 {
   debug.log("DEBUG","Inside createNewDoc.\n");
-  //where the pdfs are
-  var filePath = "D:\\inserver6\\output\\complete\\" + docObj.field1 + "\\";
-  var pdfKeys = popKeys(docObj, docObjType);
+  //where the files are
+  var filePath = "D:\\inserver6\\output\\complete\\" + docObj.field1 + "_" +appNo+ "\\";
+  var newKeys = popKeys(docObj, docObjType);
   var props = docObj.getCustomProperties();
-  var pdfDoc = new INDocument(pdfKeys);
+  var newDoc = new INDocument(newKeys);
 
   //make the document with the properties
-  if(!pdfDoc.create(props))
+  if(!newDoc.create(props))
   {
-    debug.log("ERROR","Could not create a document to store the pdf!\n");
+    debug.log("ERROR","Could not create a document to store the file!\n");
     return false;
   }
 
-  debug.log("INFO","Created [%s]\n", pdfDoc);
+  debug.log("INFO","Created [%s]\n", newDoc);
 
   //for each file that's in the export dir
   for (var j = 0; j < expFiles.length; j++)
   {
     debug.log("INFO","Working file [%s] = [%s]\n",j, expFiles[j].name);
     var parts = SElib.splitFilename(expFiles[j].name);
-    var workingPdf = parts.name + parts.ext;
+    var workingDoc = parts.name + parts.ext;
     var attr = new Array;
     attr["phsob.file.type"] = parts.ext;
-    attr["phsob.working.name"] = workingPdf;
+    attr["phsob.working.name"] = workingDoc;
     attr["phsob.source"]="GA_DocumentExport";
-    //add the pdf to the document
-    var logob = pdfDoc.storeObject(expFiles[j].name, attr);
+    //add the file to the document
+    var logob = newDoc.storeObject(expFiles[j].name, attr);
     if (logob == null)
     {
         debug.log("ERROR","Could not import document:%s.\n", getErrMsg());
@@ -511,10 +671,10 @@ function createNewDoc(docObj, expFiles, docObjType)
     {
       debug.log("INFO","Successfully imported logobID: %s.\n", logob.id);
     }
-  }//end of for each pdf
+  }//end of for each file
 
   //return the newly created doc object
-  return pdfDoc;
+  return newDoc;
 }//end createNewDoc
 
 //make the keys for the new doc with a new linkDate/Time
@@ -554,8 +714,8 @@ function getRouterEmail(lastUser)
   return emailAddr;
 }//end getRouterEmail
 
-//function to send the pdf via email
-function sendPDF(address, attachment, docObj)
+//function to send the file via email
+function sendFile(address, attachment, docObj)
 {
   debug.log("DEBUG","Sending email to [%s]\n", address);
   var attch = [];
@@ -564,10 +724,10 @@ function sendPDF(address, attachment, docObj)
     attch.push("'" + attachment[e].name + "'");
   }
   var cmd = "";
-  Clib.sprintf(cmd, '%s %s %s %s %s %s', POWERSHELL_ROOT, POWERSHELL_EMAIL_PDF, address, attch, docObj.field1, "'" + docObj.field2 + "'");
+  Clib.sprintf(cmd, '%s %s %s %s %s %s', POWERSHELL_ROOT, POWERSHELL_EMAIL_DOC, address, attch, docObj.field1, "'" + docObj.field2 + "'");
   var rtn = exec(cmd, 0);
   return rtn;
-}//end sendPDF
+}//end sendFile
 
 //function to clean up leftover files
 function cleanUpServer(filesObj)
@@ -578,7 +738,7 @@ function cleanUpServer(filesObj)
   {
     var parts = SElib.splitFilename(filesObj[b].name);
     baseDir = parts.dir;
-    //delete the pdf from the server
+    //delete the file from the server
     Clib.remove(filesObj[b].name);
     debug.log("INFO","Removed [%s]\n",filesObj[b].name);
   }
