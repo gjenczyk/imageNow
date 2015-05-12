@@ -151,7 +151,7 @@ function documentExportWF(wfObj)
       var docTypesNotUsed = [];
       var docTypeOrder = "";
       var singleDocType = "";
-      var trigger = "";
+      var trigger = [];
       var emailFlag = false;
       var importFlag = false;
       var fileFormat = null;
@@ -197,9 +197,18 @@ function documentExportWF(wfObj)
       }
 
       //check to make sure that the document is the correct type for generation
-      if(!(doc.docTypeName == trigger))
+      var foundTrigger = false;
+      for (var t = 0; t < trigger.length; t++)
       {
-        debug.log("INFO","Current doc: [%s] is not the correct type for generation: [%s]\n", doc.docTypeName, trigger);
+        if(doc.docTypeName == trigger[t])
+        {
+          debug.log("DEBUG","Found a valid trigger doctype [%s]\n", doc.docTypeName);
+          foundTrigger = true;
+        }
+      }
+      if(!foundTrigger)
+      {
+        debug.log("INFO","Current doc: [%s] [%s] is not the correct type for generation: [%s]\n", doc.id, doc.docTypeName, trigger);
         return false;
       }
 
@@ -280,7 +289,7 @@ function documentExport_intool(doc)
       var docTypesNotUsed = [];
       var docTypeOrder = "";
       var singleDocType = "";
-      var trigger = "";
+      var trigger = [];
       var emailFlag = false;
       var importFlag = false;
       var fileFormat = null;
@@ -318,9 +327,18 @@ function documentExport_intool(doc)
       }
 
       //check to make sure that the document is the correct type for generation
-      if(!(doc.docTypeName == trigger))
+      var foundTrigger = false;
+      for (var t = 0; t < trigger.length; t++)
       {
-        debug.log("INFO","Current doc: [%s] is not the correct type for generation: [%s]\n", doc.docTypeName, trigger);
+        if(doc.docTypeName == trigger[t])
+        {
+          debug.log("DEBUG","Found a valid trigger doctype [%s]\n", doc.docTypeName);
+          foundTrigger = true;
+        }
+      }
+      if(!foundTrigger)
+      {
+        debug.log("INFO","Current doc: [%s] [%s] is not the correct type for generation: [%s]\n", doc.id, doc.docTypeName, trigger);
         return false;
       }
 
