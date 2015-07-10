@@ -26,6 +26,8 @@
 #include "$IMAGENOWDIR6$\\script\\lib\\GetProp.jsh"
 #include "$IMAGENOWDIR6$\\script\\lib\\SetProp.jsh"
 #include "$IMAGENOWDIR6$\\script\\lib\\RouteItem.jsh"
+#include "$IMAGENOWDIR6$\\script\\lib\\emailService.jsh"
+#include "$IMAGENOWDIR6$\\script\\lib\\commonSharedFunction.jsh" // need this for emailService.jsh
 #include "$IMAGENOWDIR6$\\script\\STL\\packages\\Document\\getDocLogobArray.js"
 
 // *********************         Configuration        *******************
@@ -51,7 +53,8 @@ var NON_GPD_GROUPS = ["GA Directors", " Campus Administrators"];
 var STAMP_TYPES = ["Admit", "Admit with Conditions", "Deny", "Waitlist"];
 var PERMISSION_DENIED = "001-User does not have permission to route item";
 var MISSING_PROFILE = "002-Matching Profile Sheet missing";
-var MISSING_DECISION = "003-Digital Signature missing";
+var MISSING_DECISION = "003-Decision stamp missing";
+var INVALID_DECISION = "004-Stamp does not match queue";
 /**
 * Main body of script.
 * @method main
@@ -64,9 +67,10 @@ var MISSING_DECISION = "003-Digital Signature missing";
       debug = new iScriptDebug("GA_CheckReviewCompleteRoute", LOG_TO_FILE, DEBUG_LEVEL);
       debug.log("WARNING", "GA_CheckReviewCompleteRoute script started.\n");
 
-      var queuePatt = /(UM.GA)/;
+      var queuePatt = /(UM[BDL]GA)/;
       var queuePrefix = currentWfQueue.name.match(queuePatt);
       var errorQueue = queuePrefix[0] + ERROR_Q;
+      var campusCode = queuePrefix[0].substring(2,3);
 
       //get wfItem info
       var wfItem = new INWfItem(currentWfItem.id);//"321YZ6K_076VZQREF000026");//"321YZ6G_071KRY1460001YN");//
@@ -141,21 +145,22 @@ var MISSING_DECISION = "003-Digital Signature missing";
       }
 
       //make sure the router is able to do so
-      var routerGroups = clearedForRouting(userID, queueGroups, NON_GPD_GROUPS, sourceQueue.queueName);
+      var subQueueName = ""
+      var routerGroups = clearedForRouting(userID, queueGroups, NON_GPD_GROUPS, sourceQueue.queueName, subQueueName);
       if (!routerGroups || routerGroups == null)
       {
         debug.log("ERROR","[%s] doesn't have configured decision authority in [%s].\n", userID, sourceQueue.queueName);
         //route to error
         RouteItem(wfItem, sourceQueue.queueName, PERMISSION_DENIED);
+        debug.log("DEBUG","routerGroups = [%s]\n", routerGroups);
+        readTheInfoOntheDoc(true,wfItem,subQueueName,userID,campusCode);
         return false;
       }
 
       debug.log("INFO","The document is coming from: [%s] and is currently in [%s].\n", sourceQueue.queueName, validationQueue.queueName);
       
-      //find the annotation
-      var annotationTemplate = "";
-      var annotationLocation = "";
 
+      //make sure we've got a profile sheet
       var profileSheet = findProfile(wfDoc);
 
       if(!profileSheet || profileSheet == null)
@@ -163,21 +168,39 @@ var MISSING_DECISION = "003-Digital Signature missing";
         debug.log("ERROR","No profile sheet found for [%s]\n", wfDoc);
         var missingProfileQ = "UM" + wfDoc.drawer.substring(2,5) + MISSING_PROFILE_Q;
         RouteItem(wfItem, missingProfileQ, MISSING_PROFILE);
+        readTheInfoOntheDoc(true,wfItem,subQueueName,userID,campusCode);
         return false;
       }
 
-      var stamp = checkForStamps(wfDoc, profileSheet, validationQueue.queueName, annotationTemplate, annotationLocation);
+      //find the annotation
+      var expectedTemplate = "";
+      var annotationTemplate = "";
+      var annotationLocation = "";
+
+      var stamp = checkForStamps(wfDoc, profileSheet, validationQueue.queueName, expectedTemplate, annotationTemplate, annotationLocation);
 
       if(!stamp || stamp == null)
       {
-        debug.log("ERROR","No decision stamps found.\n");
+        debug.log("ERROR","No valid decision stamps found.\n");
         RouteItem(wfItem, sourceQueue.queueName, MISSING_DECISION);
+        readTheInfoOntheDoc(true,wfItem,subQueueName,userID,campusCode);
         return false;
       }
+
+      debug.log("DEBUG","Expecting [%s] in [%s], found [%s] as latest stamp.\n", expectedTemplate, validationQueue.queueName, annotationTemplate);
+      if(annotationTemplate.indexOf(expectedTemplate) != 0)
+      {
+        debug.log("ERROR","Decision stamp does not match queue.\n");
+        RouteItem(wfItem, sourceQueue.queueName, INVALID_DECISION);
+        readTheInfoOntheDoc(true,wfItem,subQueueName,userID,campusCode);
+        return false;
+      }
+      
 
       debug.log("INFO","[%s] has permission to apply [%s] in [%s]\n", userID, annotationTemplate, sourceQueue.queueName);
       //update signature reason on applicaiton and apply validation stamp
       var signatureReason = annotationTemplate.substring(4);
+      debug.log("DEBUG", "Signature reason: [%s]\n", signatureReason);
       if(!SetProp(wfDoc, REASON_CP, signatureReason))
       {
         debug.log("ERROR","Could not set [%s] to [%s]\n", REASON_CP, signatureReason);
@@ -236,7 +259,7 @@ function routingHistory(wfHist, matchQ, reason)
     if (wfHist[h].reasonText == reason && wfHist[h].queueName.indexOf(matchQ) >= 0)
     {
       qMatch = wfHist[h];
-      debug.log("INFO","Document came from queue: [%s]\n", qMatch.queueName);
+      debug.log("INFO","Document [%s] in queue: [%s]\n", reason, qMatch.queueName);
       break;
     }
   }
@@ -282,7 +305,7 @@ function queueMembership(qName)
 } // end queueMembership
 
 //check to see if this guy can route it
-function clearedForRouting(uID, qGroup, oGroup, sourceQ)
+function clearedForRouting(uID, qGroup, oGroup, sourceQ, &subQ)
 {
   //get the name of the source subQ
   var subQPatt = / (\(U.*Ready for Review\))/;
@@ -291,6 +314,8 @@ function clearedForRouting(uID, qGroup, oGroup, sourceQ)
   var campusName = sourceQ.match(campusPatt);
   var groupsToCheck = oGroup;
   var validGroups = [];
+
+  subQ = subQName;
 
   //apply campus name to the standard groups
   if ((campusName[1].length != 4) && (campusName[1].indexOf("GA") < 0))
@@ -325,6 +350,7 @@ function clearedForRouting(uID, qGroup, oGroup, sourceQ)
   for (var s = 0; s < groupsToCheck.length; s++)
   {
     var members = INUser.getGroupMembers(groupsToCheck[s]);
+    debug.log("DEBUG","Checking group: [%s]\n", groupsToCheck[s]);
     if (!members || members == null)
     {
       debug.log("ERROR","[%s] No member found or not a group: %s.\n",groupsToCheck[s], getErrMsg());
@@ -403,7 +429,7 @@ function findProfile(application)
 } // find profile
 
 //function to see if we can find stamps on a document
-function checkForStamps(application, profile, decision, &template, &page)
+function checkForStamps(application, profile, decision, &template, &foundTemp, &page)
 {
   debug.log("DEBUG","Looking for stamps belonging to [%s]\n", application);
   //get the expected stamp template
@@ -413,10 +439,12 @@ function checkForStamps(application, profile, decision, &template, &page)
   template = decTemp;
   debug.log("INFO", "Expecting a stamp template of [%s] for most recent stamp\n", decTemp);
   //get stamps from the application
-  var appStamp = lookForStamps(application, decTemp);
+  var appTemp = "";
+  var appStamp = lookForStamps(application, decTemp, appTemp);
   
-  var profileStamp = lookForStamps(profile, decTemp);
-
+  var profTemp = "";
+  var profileStamp = lookForStamps(profile, decTemp, profTemp);
+  debug.log("DEBUG","Template on application: [%s] Template on profile: [%s]\n", appTemp, profTemp);
   //return the latest stamp 
   debug.log("DEBUG","profileStamp: [%s] appStamp: [%s]\n", profileStamp, appStamp);
   var foundStamp;
@@ -429,17 +457,20 @@ function checkForStamps(application, profile, decision, &template, &page)
   {
     debug.log("DEBUG","Found latest stamp on application: [%s] [%s]\n", appStamp.id, appStamp.text);
     foundStamp = appStamp;
+    foundTemp = appTemp;
     return foundStamp;
   }
   else if (!appStamp && profileStamp)
   {
     debug.log("DEBUG","Found latest stamp on profile sheet: [%s] [%s]\n", profileStamp.id, profileStamp.text);
     foundStamp = profileStamp;
+    foundTemp = profTemp;
     return foundStamp;
   }
   else
   {
     foundStamp =  profileStamp.creationTime > appStamp.creationTime ? profileStamp : appStamp;
+    foundStamp =  profileStamp.creationTime > appStamp.creationTime ? profTemp : appTemp;
     debug.log("DEBUG","Found lastest stamp from both application and profile sheet: [%s] [%s]\n", foundStamp.id, foundStamp.text);
     return foundStamp;
   }
@@ -447,7 +478,7 @@ function checkForStamps(application, profile, decision, &template, &page)
 } // end checkForStamps
 
 //function to check for a stamp on a document
-function lookForStamps(doc, decTemp)
+function lookForStamps(doc, decTemp, &docTemp)
 {
   debug.log("DEBUG","Searching for stamp belonging to [%s]\n", doc);
   //set up current time and variables to store the newest stamp
@@ -483,6 +514,16 @@ function lookForStamps(doc, decTemp)
     {
       currentStamp = subObjs[i];
       debug.log("DEBUG", "Subob ID: [%s] Type: [%s] Stamp Text: [%s]\n", currentStamp.id, currentStamp.type, currentStamp.text);
+      var currentStampTempl = new INSubobTemplate(currentStamp.templId);
+      currentStampTempl.getInfo();
+
+      var currentOK = arrayMemeber(currentStampTempl.name);
+
+      if (!currentOK)
+      {
+        continue;
+      }
+
       var stampTimeDiff = now-currentStamp.creationTime;
 
       if(newestStamp == null || stampTimeDiff < stampDiff)
@@ -503,10 +544,12 @@ function lookForStamps(doc, decTemp)
     debug.log("INFO","Found newest stamp: [%s] [%s] [%s]\n", newestStamp.id, newestStamp.text, newestStamp.creationTime);
     var newestStampTempl = new INSubobTemplate(newestStamp.templId);
     newestStampTempl.getInfo();
-    if(newestStampTempl.name.indexOf(decTemp) < 0)
+    docTemp = newestStampTempl.name;
+    //newestStampTempl.name
+    if(docTemp.indexOf(decTemp) < 0)
     {
-      debug.log("WARNING","Newest stamp does not match queue.  Expecting [%s], we have [%s]\n", decTemp, newestStampTempl.name);
-      return false;
+      debug.log("WARNING","Newest stamp does not match queue.  Expecting [%s], we have [%s]\n", decTemp, docTemp);
+      return newestStamp;
     }
     else
     {
@@ -563,7 +606,7 @@ function applyValidationStamp(stamp, stamptmpl, queue, groups)
       valSubob.color = "0xFF0000";
       valSubob.justify = 1;
       valSubob.frameStyle = 1;
-      valSubob.fillColor = 0xffff;
+      valSubob.fillColor = 0xffffff;
       for(var key in valSubob)
       {
         printf(key + " " + valSubob[key] + "\n")
@@ -578,5 +621,23 @@ function applyValidationStamp(stamp, stamptmpl, queue, groups)
       }
   }
 } // end applyValidationStamp
+
+// function to see if an item is in an array
+function arrayMemeber(item)
+{
+  debug.log("DEBUG","Checking to see if [%s] is a decision stamp template.\n", item);
+  for (var type in STAMP_TYPES)
+  {
+    debug.log("DEBUG","type [%s] and item [%s] and indexOf [%s]\n", STAMP_TYPES[type], item, item.indexOf(STAMP_TYPES[type]))
+    if (item.indexOf(STAMP_TYPES[type]) > 1)
+    {
+      debug.log("INFO","Found [%s].  This is a valid stamp type.\n", item);
+      return true;
+    }
+  }
+
+  debug.log("DEBUG","Current stamp template [%s] is not a valid decision stamp.\n", item);
+  return false;
+}// end of arrayMember
 
 //
