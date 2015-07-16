@@ -54,14 +54,14 @@ var REMOVE_APP = false;
       debug = new iScriptDebug("BGA_appToProfile", LOG_TO_FILE, DEBUG_LEVEL);
       debug.log("WARNING", "BGA_appToProfile script started.\n");
 
-      var wfItem = new INWfItem("301YY4X_04VZ80N4N020G6T");//currentWfItem.id);//
+      var wfItem = new INWfItem(currentWfItem.id);//"301YY4X_04VZ80N4N020G6T");//
       if(!wfItem.id || !wfItem.getInfo())
       {
         debug.log("ERROR", "Couldn't get info for wfItem: %s\n", getErrMsg());
         return false;
       }
 
-      var wfQ = "UMBGA PostReview Evaluator"; //currentWfQueue.name;
+      var wfQ = currentWfQueue.name;//"UMBGA PostReview Evaluator"; //
       if(wfQ != WF_QUEUE)
       {
         debug.log("INFO","[%s] is not the correct queue for switching.\n", wfQ);
