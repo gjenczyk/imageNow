@@ -28,7 +28,7 @@ $root = "\\boisnas215c1.umasscs.net\diimages67tst\"
 $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
 $logDate = $(get-date -format 'yyyyMMdd')
-$scriptName = "ScriptName" #change this here - no extension
+$scriptName = "CompleteTaskAndMove" #change this here - no extension
 
 #- LOGGING -#
 $runLog = "${root}log\running_log-${scriptName}.log"
@@ -45,5 +45,5 @@ Use this if you want to be notified when the script finishes running
 sendmail -t "gjenczyk@umassp.edu" -s "[DI ${env} Notice] ${scriptName}.ps1 has finished running" -m ${message}
 #>
 
-$error[0] | Out-File $runLog -Append
+$error[0] | Format-List -Force | Out-File $runLog -Append
 "$(get-date) - Finishing ${scriptName} Script" | Out-File $runLog -Append

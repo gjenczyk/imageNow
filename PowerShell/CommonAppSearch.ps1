@@ -29,7 +29,7 @@ $env = $env -replace "W.*",""
 $logDate = $(get-date -format 'yyyyMMdd')
 
 #- LOGGING -#
-$runLog = "${root}inserver6\log\run_log-CommonAppSearch.log"
+$runLog = "${root}inserver6\log\run_log-CommonAppSearch_${logDate}.log"
 $scriptLog = "${root}inserver6\log\CommonAppSearch_${logDate}.log"
 
 #-- MAIN --#
@@ -62,5 +62,5 @@ sendmail -t UITS.DI.CORE@umassp.edu -s "[DI ${env} Notice] CommonAppSearch.ps1 h
 Start-Sleep -s 2
 Get-Item -path $scriptLog | Rename-Item -NewName {$_.Name -replace ".log","-$(Get-Date -format 'HHmm').log"}
 
-$error[0] | Out-File $runLog -Append
+$error[0] | Format-List -Force | Out-File $runLog -Append
 "$(get-date) - Finishing CommonAppSearch Script" | Out-File $runLog -Append

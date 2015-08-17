@@ -30,8 +30,8 @@ $env = $env -replace "W.*",""
 $logDate = $(get-date -format 'yyyyMMdd')
 
 #- LOGGING -#
-$runLog = "${root}log\running_log-userVolumeLogger.log"
-$scriptLog = "${root}log\userVolumeLogger${logDate}.log"
+$runLog = "${root}log\run_log-userVolumeLogger_${logDate}.log"
+$scriptLog = "${root}log\userVolumeLogger_${logDate}.log"
 
 #-- MAIN --#
 "$(get-date) - Starting userVolumeLogger Script" | Out-File $runLog -Append
@@ -44,5 +44,5 @@ Use this if you want to be notified when the script finishes running
 sendmail -t "gjenczyk@umassp.edu" -s "[DI ${env} Notice] ScriptName.ps1 has finished running" -m ${message}
 #>
 
-$error[0] | Out-File $runLog -Append
+$error[0] | Format-List -Force | Out-File $runLog -Append
 "$(get-date) - Finishing userVolumeLogger Script" | Out-File $runLog -Append

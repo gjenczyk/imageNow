@@ -27,7 +27,7 @@ $startDir = pwd
 $root = "Y:\"
 $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
-$DIemail = @("UITS.DI.CORE@umassp.edu", "Terence.phalen@umb.edu")
+$DIemail = @("UITS.DI.CORE@umassp.edu", "Terence.phalen@umb.edu")  #@("gjenczyk@umassp.edu")
 #- Date formatting -#
 $myDate = (get-date -format 'yyyy-MM-dd')
 $shortDate = (get-date -format 'yyyyMMdd')
@@ -49,10 +49,10 @@ $dataBankLog_workingPath = "${inputDirectory}logs\"
 
 #runlog setup
 $runLogPath = "\\ssisnas215c2.umasscs.net\diimages67prd\log\"
-$runLogFileName = "run_log-UMBUA_Databank_Import.log"
+$runLogFileName = "run_log-UMBUA_Databank_Import_${shortDate}.log"
 $fullRunLog = "${runLogPath}${runLogFileName}"
-$scriptLog = "D:\inserver6\log\UMBUA_Databank_Import_$y$m$d.log"
-$doneLog = "D:\inserver6\log\UMBUA_Databank_Import_DONE_$y$m$d.log"
+$scriptLog = "D:\inserver6\log\UMBUA_Databank_Import_${y}${m}${d}.log"
+$doneLog = "D:\inserver6\log\UMBUA_Databank_Import_DONE_${y}${m}${d}${h}${mi}.log"
 
 cd $inputDirectory
 
@@ -109,8 +109,37 @@ Get-ChildItem -Path *.zip | ForEach-Object {
         }
 
 } # end Get-ChildItem
+try
+{
+    D:\inserver6\bin64\intool --cmd run-iscript --file \\ssisnas215c2.umasscs.net\diimages67prd\script\UMBUA_Databank_Import\UMBUA_Databank_Import.js >> $fullRunLog
+}
+catch [system.exception]
+{
+    $error[0] | Format-List -Force | Out-File -Append $fullRunLog
+    if($error[0] -match "The specified network name is no longer available")
+    {
+        $attempt = 0
+        do
+        {
+            Start-Sleep -Seconds 3
+            if((Test-Path -Path D:\inserver6\bin64\intool.exe) -and (Test-Path -Path \\boisnas215c1.umasscs.net\diimages67tst\script\UMBUA_Databank_Import\UMBUA_Databank_Import.js))
+            {
+                D:\inserver6\bin64\intool --cmd run-iscript --file \\ssisnas215c2.umasscs.net\diimages67prd\script\UMBUA_Databank_Import\UMBUA_Databank_Import.js >> $fullRunLog
+                if($?)
+                {
+                    break
+                }
+            }
+            $error[0] | Format-List -Force | Out-File -Append $fullRunLog
+            $attempt++
+        }while ($attempt -lt 5)
+        if($attempt -ge 4)
+        {
+            sendmail -to @("UITS.DI.CORE@umassp.edu") -s "There might have been a problem loading databank files" -m "We tried 5 times and couldn't reach the share" -a ${fullRunLog}
+        }
+    }
+}
 
-D:\inserver6\bin64\intool --cmd run-iscript --file \\ssisnas215c2.umasscs.net\diimages67prd\script\UMBUA_Databank_Import\UMBUA_Databank_Import.js >> $fullRunLog
 $endTime = Get-Date
 "UMBUA_Databank_Import.ps1 finished running at $endTime" | Out-File -Append $fullRunLog
 $totalTime = $endTime-$startTime

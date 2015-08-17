@@ -24,7 +24,7 @@
 #-- CONFIG --#
 
 $localRoot = "D:\"
-$root = "Z:\"
+$root = "\\ssisnas215c2.umasscs.net\diimages67prd\"
 $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
 $logDate = $(get-date -format 'yyyyMMdd')
@@ -32,17 +32,18 @@ $logDate = $(get-date -format 'yyyyMMdd')
 #- LOGGING -#
 $runLog = "${root}log\running_log-IMPORT_runner.log"
 $scriptLog = "${root}log\IMPORT_runner${logDate}.log"
+$scriptName = "IMPORT_UMBSR_Undergraduate_Cleanup"
 
 #-- MAIN --#
 "$(get-date) - Starting IMPORT_runner Script" | Out-File $runLog -Append
 
-D:\inserver6\bin64\intool --cmd run-iscript --file ${root}script\IMPORT_UMBSR_Undergraduate_AdmissionsFall.js >> $runLog
+D:\inserver6\bin64\intool --cmd run-iscript --file ${root}script\${scriptName}.js >> $runLog
 
 <#
 Use this if you want to be notified when the script finishes running
 #>
-sendmail -t "gjenczyk@umassp.edu","cmatera@umassp.edu" -s "[DI ${env} Notice] IMPORT_runner.ps1 has finished running" -m ${message}
+sendmail -t "gjenczyk@umassp.edu" -s "[DI ${env} Notice] IMPORT_runner.ps1 has finished running" -m ${message}
 
 
-$error[0] | Out-File $runLog -Append
+$error[0] | Format-List -Force | Out-File $runLog -Append
 "$(get-date) - Finishing IMPORT_runner Script" | Out-File $runLog -Append

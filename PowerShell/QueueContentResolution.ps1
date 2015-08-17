@@ -30,7 +30,7 @@ $env = $env -replace "W.*",""
 $logDate = $(get-date -format 'yyyyMMdd')
 
 #- LOGGING -#
-$runLog = "${root}log\run_log-QueueContentResolution.log"
+$runLog = "${root}log\run_log-QueueContentResolution_${logDate}.log"
 $scriptLog = "${root}log\QueueContentResolution_${logDate}.log"
 
 #-- MAIN --#
@@ -44,5 +44,5 @@ Use this if you want to be notified when the script finishes running
 sendmail -t "gjenczyk@umassp.edu" -s "[DI ${env} Notice] ScriptName.ps1 has finished running" -m ${message}
 #>
 
-$error[0] | Out-File $runLog -Append
+$error[0] | Format-List -Force | Out-File $runLog -Append
 "$(get-date) - Finishing QueueContentResolution Script" | Out-File $runLog -Append

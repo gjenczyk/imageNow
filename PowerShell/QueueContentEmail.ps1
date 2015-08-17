@@ -27,30 +27,30 @@ Param([string]$csvPath,
       )
 
 #- INCLUDES -#
-. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
+. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
 
 #- VARIABLES -#
-$log = '\\boisnas215c1.umasscs.net\diimages67tst\log\email.log'
+$log = '\\ssisnas215c2.umasscs.net\diimages67prd\log\email.log'
 $csvPath | Out-File  $log -Append
 $docPath | Out-File $log -Append
 $errorReason | Out-File $log -Append
 
 $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
-$root = "\\boisnas215c1.umasscs.net\di_interfaces\"
+$root = "Y:\"
 $csvName = $csvPath -replace ".*\\",""
 $docName = $docPath -replace ".*\\",""
 $importType = $docName -replace "_.*",""
 $successDir = $docPath -replace "[^\\]*$",""
 
 #- Email Selector -#
-$bostonGA = ("gjenczyk@umassp.edu","")
-$bostonUA = ("gjenczyk@umassp.edu","")
-$dartmouthGA = ("gjenczyk@umassp.edu","")
-$dartmouthUA = ("gjenczyk@umassp.edu","")
-$lowellGA = ("gregg_jenczyk@student.uml.edu")
-$lowellUA = ("gjenczyk@umassp.edu", "gregg_jenczyk@student.uml.edu")
-$DISupport = ("gjenczyk@umassp.edu")
+$bostonGA = ("UITS.DI.CORE@umassp.edu","Peggy.Patel@umb.edu", "mary.ryan@umb.edu")
+$bostonUA = ("UITS.DI.CORE@umassp.edu","john.drew@umb.edu", "Lisa.Williams@umb.edu", "mary.ryan@umb.edu")
+$dartmouthGA = ("UITS.DI.CORE@umassp.edu","graduate@umassd.edu","j1mello@umassd.edu")
+$dartmouthUA = ("UITS.DI.CORE@umassp.edu","Athompson@umassd.edu", "cgoodine@umassd.edu", "j1mello@umassd.edu")
+$lowellGA = ("UITS.DI.CORE@umassp.edu", "linda_southworth@uml.edu", "Daniel_Bedard@uml.edu", "Barbara_Dougherty@uml.edu")
+$lowellUA = ("UITS.DI.CORE@umassp.edu", "Kathleen_Shannon@uml.edu", "Dania_Valdes@uml.edu", "Daniel_Bedard@uml.edu")
+$DISupport = ("UITS.DI.CORE@umassp.edu")
 
 function campusSwitch ([string] $emailOffice) {
     #selects the correct target emails based on campus and career
@@ -106,6 +106,7 @@ if ($importType -eq "WADOC") {
     $customMessage="The attached $importType file belonging to $campus ($appCenter) failed to be imported into DI for the following reason:
 	-
 	${errorReason}"
+    #ADD FINANCIAL AID IMPORTS HERE
 } else {
     $campus="Unknown"
 	$customMessage="The attached document failed to be imported for the following reason:
@@ -143,7 +144,7 @@ if ($csvPath -ne ''){
 }
 
 $combo = $campus + " " + $appCenter
-echo $combo
+
 sendmail -t  $(campusSwitch($combo)) -s "$messageTitle" -a @($attachments) -m $messageBody
-#gjenczyk@umassp.edu
-$error[0] | Out-File $log -Append
+
+$error[0] | Format-List -Force | Out-File $log -Append

@@ -49,7 +49,7 @@ if (Test-Path "${csvDir}_D_${passedDate}.csv")
     $attachment += "${csvDir}_D_${passedDate}.csv"
 }
 
-sendmail -s "[DI $env Notice] User Report for $(Get-Date -Format MM/dd/yyyy)" -a $attachment -m $body -to gjenczyk@umassp.edu, cmatera@umassp.edu, lprudden@umassp.edu -flag "BodyAsHtml"
+sendmail -s "[DI $env Notice] User Report for $(Get-Date -Format MM/dd/yyyy)" -a $attachment -m $body -to UITS.DI.CORE@umassp.edu -flag "BodyAsHtml"
 
 Remove-Item -Path "${csvDir}_D_${passedDate}.csv" -ErrorAction SilentlyContinue
 Remove-Item -Path "${csvDir}_R_${passedDate}.csv"

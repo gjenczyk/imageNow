@@ -29,7 +29,7 @@ Param(
     )
 
 #-- INCLUDES --#
-. "\\boisnas215c1.umasscs.net\diimages67tst\script\PowerShell\sendmail.ps1"
+. "\\ssisnas215c2.umasscs.net\diimages67prd\script\PowerShell\sendmail.ps1"
 
 #-- CONFIG --#
 $localRoot = "D:\"
@@ -56,12 +56,12 @@ try
     
 }
 catch [system.exception]{
-    $error[0] | Out-File $runLog -Append
+    $error[0] | Format-List -Force | Out-File $runLog -Append
     $returnCode = 1;
 }
 finally
 {
-    $error[0] | Out-File $runLog -Append
+    $error[0] | Format-List -Force | Out-File $runLog -Append
     "$(get-date) - Finishing ${scriptName} Script`n Returned: ${returnCode}" | Out-File $runLog -Append
     [Environment]::Exit($returnCode)
 }

@@ -32,13 +32,14 @@ $env = ([environment]::MachineName).Substring(2)
 $env = $env -replace "W.*",""
 $myDate = (get-date -format 'yyyy-MM-dd')
 $shortDate = (get-date -format 'yyMMdd')
+$logDate = $(get-date -format 'yyyyMMdd')
 
     #-- EMAIL AND LOADING CONFIGS --#
     # change the value of sneakLoading if you are going to do an unscheduled import so
     # emails do not get sent to the campuses (values: $true or $false)
     $sneakLoading = $false
     # flag to change contents of email based on admissions cycle
-    $peakCyle = $true
+    $peakCyle = $false
 
 
     if (!$sneakLoading) {
@@ -312,6 +313,7 @@ function commonAppClean ([string] $cleanCampus) {
       if ((Get-Item $_.FullName).length -eq 0) {
         "$pdfName is empty :(" | Out-File -Append $runLog
       }
+      #add elseif for DACA here when we know which CA code it is in.
       elseif ((Get-Item $_.FullName) -match "_SR_")
       {
         Move-Item -Path ${inputDirectory}1_unzipFiles\${cleanCampus}\$pdfName -Destination ${srDirectory}${pdfName}
@@ -370,7 +372,7 @@ $DIImportLogging_workingPath = "${inputDirectory}ca_logs\"
 $DIImportLogging_completePath = "${root}import_agent\${env}_import_logs\"
 $runLogDir = "\\ssisnas215c2.umasscs.net\diimages67prd\log\"
 $runLogDelim = "*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*"
-$runLogName = "running_log-commonAppImport.log"
+$runLogName = "run_log-commonAppImport_${logDate}.log"
 $runLog = "${runLogDir}${runLogName}"
 
 

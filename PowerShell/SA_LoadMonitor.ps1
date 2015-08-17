@@ -29,7 +29,7 @@ $env = $env -replace "W.*",""
 $logDate = $(get-date -format 'yyyyMMdd')
 
 #- LOGGING -#
-$runLog = "${root}log\running_log-SA_LoadMonitor.log"
+$runLog = "${root}log\run_log-SA_LoadMonitor_${logDate}.log"
 $scriptLog = "${root}log\SA_LoadMonitor_${logDate}.log"
 
 #-- MAIN --#
@@ -43,5 +43,5 @@ Use this if you want to be notified when the script finishes running
 sendmail -t "gjenczyk@umassp.edu" -s "[DI ${env} Notice] ScriptName.ps1 has finished running" -m ${message}
 #>
 
-$error[0] | Out-File $runLog -Append
+$error[0] | Format-List -Force | Out-File $runLog -Append
 "$(get-date) - Finishing SA_LoadMonitor Script" | Out-File $runLog -Append
