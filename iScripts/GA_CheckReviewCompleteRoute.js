@@ -26,7 +26,7 @@
 #include "$IMAGENOWDIR6$\\script\\lib\\GetProp.jsh"
 #include "$IMAGENOWDIR6$\\script\\lib\\SetProp.jsh"
 #include "$IMAGENOWDIR6$\\script\\lib\\RouteItem.jsh"
-#include "$IMAGENOWDIR6$\\script\\lib\\emailService.jsh"
+#include "$IMAGENOWDIR6$\\script\\lib\\emailService_NEW.jsh"
 #include "$IMAGENOWDIR6$\\script\\lib\\commonSharedFunction.jsh" // need this for emailService.jsh
 #include "$IMAGENOWDIR6$\\script\\STL\\packages\\Document\\getDocLogobArray.js"
 

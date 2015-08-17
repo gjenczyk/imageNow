@@ -124,7 +124,7 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
           if (!checkConfig(workingDocType, cpsToAdd, cpsToRemove))
           {
             debug.log("ERROR","One or more configured items are not valid.\n");
-            rollbackUpdates(origCPs, completedProcessing);
+            //rollbackUpdates(origCPs, completedProcessing);
             return false;
           }// end if (!checkCPConfig())
 
@@ -133,7 +133,7 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
           if((!CP_ADD_OK.value && !CP_REMOVE_OK.value)|| !DOCTYPE_OK.value)
           {
             debug.log("ERROR","There is nothing to update!\n");
-            rollbackUpdates(origCPs, completedProcessing);
+            //rollbackUpdates(origCPs, completedProcessing);
             return false;
           }
           //If we're adding or removing
@@ -159,14 +159,14 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
               for (b=0; b<props.length; b++)
               {
                 debug.log("INFO","EXISTING DOCTYPE PROPS: id:%s, name:%s, isRequired:%s \n",props[b].id, props[b].name, props[b].isRequired);
-                propArr.push(props[b]);
+//                propArr.push(props[b]);
               }//end for (b=0; b<props.length; b++)
             }
             else
             {
               //create it here if we want to do that?
               debug.log("ERROR","Failed to retrieve info for document type - Error: [%s]\n", getErrMsg());
-              rollbackUpdates(origCPs, completedProcessing);
+              //rollbackUpdates(origCPs, completedProcessing);
               return false;
             }//end if (docType.getInfo()) else
 
@@ -177,7 +177,7 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
                 if(!addToList(workingDocType))
                 {
                   debug.log("ERROR","Could not add [%s] to [%s]. Check config and rerun!\n",workingDocType.name, workingDocType.list);
-                  rollbackUpdates(origCPs, completedProcessing);
+                  //rollbackUpdates(origCPs, completedProcessing);
                   return false;
                 }
                 else
@@ -200,7 +200,7 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
               for (var f = 0; f < insLen; f++)
               {
                 //set position if we have a bad value.
-                if(((!parseInt(cpsToAdd[f].position) || !cpsToAdd[f].position) && cpsToAdd[f].position != 0) || cpsToAdd[f].position === null)
+                if(((!parseInt(cpsToAdd[f].position) || !cpsToAdd[f].position) && cpsToAdd[f].position > 1) || cpsToAdd[f].position === null)
                 {
                   debug.log("WARNING","Passed bad value for position: [%s] position: [%s]\n",cpsToAdd[f].name, cpsToAdd[f].position);
                   cpsToAdd[f].position = propLen + posMod;
@@ -215,7 +215,7 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
               }//end for (var f = 0; f < insLen; f++)
 
               //now that that's done, sort cpsToAdd by position and increment values so they go where you want them to!
-              cpsToAdd.sort(function(a, b){return a.position-b.position});
+//              cpsToAdd.sort(function(a, b){return a.position-b.position});
 
               //now, adjust postion so props go where you want them to
               for (var e = 0; e < insLen; e++)
@@ -257,18 +257,18 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
               if(dupErr)
               {
                 debug.log("ERROR","Duplicate CPs were detected.  Please fix configuration and re-run.\n");
-                rollbackUpdates(origCPs, completedProcessing);
-                return false;
+                //rollbackUpdates(origCPs, completedProcessing);
+                //return false;
               }
 
               if (!updateDoc(docType,propArr))
               {
                 debug.log("ERROR","Could not update doctype [%s]\n",docType.name);
-                rollbackUpdates(origCPs, completedProcessing);
-                return false;
-              }
-              else
-              {
+                //rollbackUpdates(origCPs, completedProcessing);
+//                return false;
+//              }
+//              else
+//              {
                 completedProcessing = true;
               }
 
@@ -288,7 +288,7 @@ FLAGS = [DOCTYPE_OK,CP_ADD_OK,CP_REMOVE_OK];
               if (!updateDoc(docType,propArr))
               {
                 debug.log("ERROR","Could not update doctype [%s]\n",docType.name);
-                rollbackUpdates(origCPs, completedProcessing);
+                //rollbackUpdates(origCPs, completedProcessing);
                 return false;
               }
               else
@@ -435,11 +435,12 @@ function checkCPs(allCpArr, workCpArr, cpFlag)
 function checkDocTypes(dtArr, dtFlag)
 {
   var curDT = INDocType.get(dtArr.name);
+  var docDesc = dtArr.name.substr(dtArr.name.length - 3);
   if(!curDT || curDT == null)
   {   
     if (dtArr.create)
     {
-      if(!createDocType(dtArr))
+      if(!createDocType(dtArr, docDesc))
       {
         debug.log("ERROR","Could not create docType [%s]\n",dtArr.name);
         return false;    
@@ -501,7 +502,8 @@ function resetFlags () {
 //function to create a doctype
 function createDocType(makeDoc)
 {
-  var newDocType = INDocType.add(makeDoc.name);
+  var desc = makeDoc.name.substr(makeDoc.name.length-3);
+  var newDocType = INDocType.add(makeDoc.name, desc);
   if(!newDocType || newDocType == null)
   {
     debug.log("ERROR","Error creating newDocType [%s] [%s]\n",makeDoc.name, getErrMsg());
@@ -536,10 +538,12 @@ function addToList(dtInfo)
       return false;
     }
     
-    if(!addList.updateMembers(typeToAdd.id))
+    addList.members.push(typeToAdd.id);
+
+    if(!addList.updateMembers(addList.members))
     {
       debug.log("ERROR","Couldn't update doctype list [%s] - [%s]\n", addList.name, getErrMsg());
-      return false;
+      return true; //false;
     }
   }
   return true;

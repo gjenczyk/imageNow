@@ -31,7 +31,7 @@
 #define DEBUG_LEVEL         5       // 0 - 5.  0 least output, 5 most verbose
 #define SPLIT_LOG_BY_THREAD false   // set to true in high volume scripts when multiple worker threads are used (workflow, external message agent, etc)
 #define MAX_LOG_FILE_SIZE   100     // Maximum size of log file (in MB) before a new one will be created
-#define USE_CSV             false    //true if using a csv to complete projects, false if just doing everythign in a queue
+#define USE_CSV             true    //true if using a csv to complete projects, false if just doing everythign in a queue
 
 // *********************       End  Configuration     *******************
 
@@ -105,7 +105,7 @@ function main ()
 function processByQueue()
 {
   debug.log("INFO","Attempting to load YAML\n");
-  loadYAMLConfig(imagenowDir6+"\\script\\CompleteTaskAndMove\\queue_config\\");
+  loadYAMLConfig(imagenowDir6+"\\script\\config_scripts\\CompleteTaskAndMove\\queue_config\\");
 
   for (var sourceQConfig in CFG.queue_config)
   { 
@@ -272,7 +272,7 @@ function processByCSV()
 {
   // place to check for csv
   //csv format EMPLID,APP NO,Task Template,Task Reason,Destination queue
-  csvPath = imagenowDir6+"\\script\\CompleteTaskAndMove\\";
+  csvPath = imagenowDir6+"\\script\\config_scripts\\CompleteTaskAndMove\\";
   workingCsv = "";
 
   var csvResult = SElib.directory(csvPath+"*.csv", false, ~FATTR_SUBDIR);
@@ -416,7 +416,7 @@ function processByCSV()
         var readyToRoute = false;
         var useThisTask = {id:null,taskTemplateID:null,creationTime:0};
 
-        useThisTask = getLatestTask(uesThisTask, csvTaskList, csvTargetTemplate);
+        useThisTask = getLatestTask(useThisTask, csvTaskList, csvTargetTemplate);
 
         if(useThisTask.id == null)
         {

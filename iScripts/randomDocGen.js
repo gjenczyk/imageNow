@@ -39,11 +39,11 @@
 
 var CSV_PATH = imagenowDir6+"\\script\\MOCK_DATA.csv";
 var TXT_PATH = imagenowDir6+"\\script\\MOCK_DATA.txt";
-var QUEUE = "DFA Link Documents";//Router"; //
-var DRAWER = "UMDFA";
-var DOC_TYPE_LIST = "UMD Financial Aid";
+var QUEUE = "LFA Link Documents";//Router"; //
+var DRAWER = "UMLFA";
+var DOC_TYPE_LIST = "UML Financial Aid";
 var CP_SOURCE = "iScript";
-var CP_APP_PLAN = "COIN FA Custom Page";
+var CP_APP_PLAN = "SiS FA Custom Page";
 
 
 /**
@@ -92,15 +92,16 @@ var CP_APP_PLAN = "COIN FA Custom Page";
             //printf("linkDate: "+linkDate+"\n")
             var docType = dtList.members[u].name
             //printf(dtList.members[u].name+"\n")
+           // var 
             var doc = new INDocument(DRAWER, emplid, name, aidYear, career, linkDate, docType);
             var props = new Array();
             var prop1 = new INInstanceProp();
-            prop1.name = "Source";
-            prop1.setValue(CP_SOURCE);
+//            prop1.name = "Source";
+//            prop1.setValue(CP_SOURCE);
             props.push(prop1);
             var prop2 = new INInstanceProp();
-            prop2.name = "Document App Plan";
-            prop2.setValue(CP_APP_PLAN);
+//            prop2.name = "Document App Plan";
+//            prop2.setValue(CP_APP_PLAN);
             props.push(prop2);
             if (!doc.create(props))
             {

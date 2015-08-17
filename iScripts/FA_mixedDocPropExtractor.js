@@ -23,6 +23,7 @@
 #include "$IMAGENOWDIR6$\\script\\lib\\csvObject.jsh"
 #include "$IMAGENOWDIR6$\\script\\lib\\yaml_loader.jsh"
 #include "$IMAGENOWDIR6$\\script\\lib\\HostDBLookupInfo.jsh"
+#include "$IMAGENOWDIR6$\\script\\lib\\GetProp.jsh"
 
 // ********************* Initialize global variables *********************************
 
@@ -69,9 +70,7 @@ function main()
 		debug = new iScriptDebug("FA_mixedDocPropExtractor", LOG_TO_FILE, DEBUG_LEVEL);
 		debug.log("INFO", "FA_mixedDocPropExtractor script started.\n");
 
-//		var wfItem = new INWfItem("301YX7Y_04JN75QBN0000GH");
-		//var wfItem = new INWfItem("321YZ6T_077Y797L4000095");
-		var wfItem = new INWfItem(currentWfItem.id);//"321YZ79_079E0NHQ20005FW");//"321YZ6T_077Y797L4000095");//
+		var wfItem = new INWfItem(currentWfItem.id);//"321YZ7E_07CE4TCV500000E");//"321YZ6T_077Y797L4000095");//
 		if(!wfItem.id || !wfItem.getInfo())
 		{
 			debug.log("CRITICAL", " Couldn't get info for wfItem: %s\n", getErrMsg());
@@ -95,7 +94,7 @@ function main()
             if(!doc.id || !doc.getInfo())
             {
 				debug.log("ERROR", "unable to get Document info for workflow item with id [%s]\n", wfItem.objectId);
-				RouteItem(wfItem, errorQueueOTH, "unable to get info for Document");
+				RouteItem(wfItem, errorQueueOTH, "Unable to get info for document");
 				return false;
 			}
 			debug.log("INFO","Document [%s] ID: [%s]\n",doc.docTypeName, doc.id);
@@ -109,7 +108,7 @@ function main()
 				debug.log("INFO", "Institution: [%s] Aid Year: [%s] Student ID: [%s] Doc Type: [%s] Checklist Update: [%s]\n",opPropValues[0],opPropValues[1],opPropValues[2],opPropValues[3],opPropValues[7]);	
 				if (!(opPropValues[0] && opPropValues[1] && opPropValues[2] && opPropValues[3]))
            		{
-					debug.log("ERROR", "Institution, Aid Year, Student ID, and Document Type: [%s],[%s],[%s],[%s],[%s].\n", opPropValues[0],opPropValues[1],opPropValues[2],opPropValues[3]);
+					debug.log("ERROR", "Institution, Aid Year, Student ID, and Document Type: [%s],[%s],[%s],[%s].\n", opPropValues[0],opPropValues[1],opPropValues[2],opPropValues[3]);
 					RouteItem(wfItem, errorQueueDE, "Data Entry Error: Application Number, Student ID, Document Type, App Center, and Career are mandatory fields.");
 					return false;
 				}
@@ -189,7 +188,8 @@ function main()
 			else
 			{
 				debug.log("INFO", "Value of Checklist Update property is not 'Y': %s\n",opPropValues[7]);
-				routeToReview(wfItem, doc, campus)	
+				routeToReview(wfItem, doc, campus);
+				return;	
 			}				
 
 //			var acv = {appNum, stuId, docTyp};
@@ -319,91 +319,103 @@ function writeToCSV(opPropValues)
 */
 
 //function to find to where a doc should be routed
-function routeToReview(wfDoc, docObj, campus, errQ)
+function routeToReview(wfDoc, docObj, campus)
 {
 	debug.log("DEBUG","Preparing to route: [%s] from: [%s]\n", docObj, wfDoc.queueName);
 	var desQ = "";
+	var msg = "";
 
-	var sql = "SELECT DP.PROCESS_CODE " +
-	"FROM ISCRIPTUSER.DI_DOCT_PROCESS DP " +
-	"INNER JOIN ISCRIPTUSER.PROCESS_DETAILS PD " +
-	"ON DP.PROCESS_CODE = PD.PROCESS " +
-	"WHERE DP.DOCTYPE_CODE = '"+docObj.docTypeName+"' " +
-	"AND DP.IS_PRIMARY = 'Y'";
-
-	var  returnVal = new Array();
-	var cur = getHostDBLookupInfo_cur(sql,returnVal);
-
-	if(!cur)
+	var needsRevew = GetProp(docObj, "Needs Review");
+	
+	if(!needsRevew || needsRevew != "Y")
 	{
-		debug.log("WARNING","Unable to determine process code associated with document.  Routing to catch-all queue\n");
+		desQ = campus + " Flip Flag";
+		msg = "Document does not need review."
 	}
 	else
 	{
-		loadYAMLConfig(imagenowDir6+"\\script\\config_scripts\\FA_mixedDocPropExtractor\\");
-		var procCode = cur[0];
-		for (var campusConfig in CFG.FA_mixedDocPropExtractor)
-      	{
-      		var thisConfig = CFG.FA_mixedDocPropExtractor[campusConfig].CAMPUS_CONFIG;
-      		for (var i = 0; i < thisConfig.length; i++)
+		var sql = "SELECT DP.PROC_CODE " +
+		"FROM ISCRIPTUSER.DI_DOCT_PROCESS_X DP " +
+		"INNER JOIN ISCRIPTUSER.DOC_TYPE_X DT " +
+		"ON DT.DOC_TYPE_CODE = DP.DOC_TYPE_CODE " +
+		"WHERE DT.DOC_TYPE_NAME = '"+docObj.docTypeName+"' " +
+		"AND DP.IS_PRIMARY = 'Y'";
+	
+		var  returnVal = new Array();
+		var cur = getHostDBLookupInfo_cur(sql,returnVal);
+	
+		if(!cur)
+		{
+			debug.log("WARNING","Unable to determine process code associated with document.  Routing to catch-all queue\n");
+		}
+		else
+		{
+			loadYAMLConfig(imagenowDir6+"\\script\\config_scripts\\FA_mixedDocPropExtractor\\");
+			var procCode = cur[0];
+			debug.log("DEBUG","Found process code: [%s]\n", procCode);
+			for (var campusConfig in CFG.FA_mixedDocPropExtractor)
       		{
-      			var sourceQ = thisConfig[i].SOURCE_QUEUE;
-      			var routingConfig = thisConfig[i].ROUTING_CONFIG;
-      			
-      			for (var j = 0; j < sourceQ.length; j++)
+      			var thisConfig = CFG.FA_mixedDocPropExtractor[campusConfig].CAMPUS_CONFIG;
+      			for (var i = 0; i < thisConfig.length; i++)
       			{
-      				if(sourceQ[j].name == wfDoc.queueName)
+      				var sourceQ = thisConfig[i].SOURCE_QUEUE;
+      				var routingConfig = thisConfig[i].ROUTING_CONFIG;
+      				
+      				for (var j = 0; j < sourceQ.length; j++)
       				{
-      					for (var k = 0; k < routingConfig.length; k++)
+      					if(sourceQ[j].name == wfDoc.queueName)
       					{
-      						if(procCode == routingConfig[k].process_code)
+      						for (var k = 0; k < routingConfig.length; k++)
       						{
-      							if(routingConfig[k].multi_subqueues)
+      							if(procCode == routingConfig[k].process_code)
       							{
-      								debug.log("DEBUG","Process [%s] is configured for multiple subqueues.\n", procCode);
-      								var docMatch = false;
-      								for (var l = 0; l < routingConfig[k].subqueue_mapping.length; l++)
+      								if(routingConfig[k].multi_subqueues)
       								{
-      									if(routingConfig[k].subqueue_mapping[l].doc_types.length == 0)
+      									debug.log("DEBUG","Process [%s] is configured for multiple subqueues.\n", procCode);
+      									var docMatch = false;
+      									for (var l = 0; l < routingConfig[k].subqueue_mapping.length; l++)
       									{
-      										desQ = routingConfig[k].subqueue_mapping[l].destination_queue;
-      										debug.log("DEBUG","Found destination queue: [%s]\n", desQ);
-      										break;
-      									}
-      									else
-      									{
-	      									for (var m = 0; m < routingConfig[k].subqueue_mapping[l].doc_types.length; m++)
-	      									{
-	      										if(routingConfig[k].subqueue_mapping[l].doc_types[m] == docObj.docTypeName)
-	      										{
-	      											desQ = routingConfig[k].subqueue_mapping[l].destination_queue;
-      												debug.log("DEBUG","Found destination queue: [%s]\n", desQ);
-      												docMatch = true;
-      												break;
-	      										}// end if(routingConfig[k].subqueue_mapping[l].doc_types[m] == docObj.docTypeName)
-
-	      									}// end for (var m = 0; m < routingConfig[k].subqueue_mapping[l].doc_types.length; m++)
-      									}
-      									if(docMatch)
-	      								{
-	      									break;
-	      								}
-      								}// end for (var l = 0; l < routingConfig[k].subqueue_mapping.length; l++)
-      							}// end if(routingConfig[k].multi_subqueues)
-      							else
-      							{
-      								desQ = routingConfig[k].destination_queue;
-      								debug.log("DEBUG","Found destination queue: [%s]\n", desQ);
-      								break;
-      							}
-      							
-      						}// end if(procCode == routingConfig[k].process_code)
-      					}// end for (var k = 0; k < routingConfig.length; k++)
-      				}// end if(sourceQ[j].name == wfDoc.queueName)
-      			}// end for (var j = 0; j < sourceQ.length; j++)
-      		}// end for (var i = 0; i < thisConfig.length; i++)
-      	}// end for (var campusConfig in CFG.FA_mixedDocPropExtractor)
-	}// end else
+      										if(routingConfig[k].subqueue_mapping[l].doc_types.length == 0)
+      										{
+      											desQ = routingConfig[k].subqueue_mapping[l].destination_queue;
+      											debug.log("DEBUG","Found destination queue: [%s]\n", desQ);
+      											break;
+      										}
+      										else
+      										{
+	    	  									for (var m = 0; m < routingConfig[k].subqueue_mapping[l].doc_types.length; m++)
+	    	  									{
+	    	  										if(routingConfig[k].subqueue_mapping[l].doc_types[m] == docObj.docTypeName)
+	    	  										{
+	    	  											desQ = routingConfig[k].subqueue_mapping[l].destination_queue;
+      													debug.log("DEBUG","Found destination queue: [%s]\n", desQ);
+      													docMatch = true;
+      													break;
+	    	  										}// end if(routingConfig[k].subqueue_mapping[l].doc_types[m] == docObj.docTypeName)
+	
+	    	  									}// end for (var m = 0; m < routingConfig[k].subqueue_mapping[l].doc_types.length; m++)
+      										}
+      										if(docMatch)
+	    	  								{
+	    	  									break;
+	    	  								}
+      									}// end for (var l = 0; l < routingConfig[k].subqueue_mapping.length; l++)
+      								}// end if(routingConfig[k].multi_subqueues)
+      								else
+      								{
+      									desQ = routingConfig[k].destination_queue;
+      									debug.log("DEBUG","Found destination queue: [%s]\n", desQ);
+      									break;
+      								}
+      								
+      							}// end if(procCode == routingConfig[k].process_code)
+      						}// end for (var k = 0; k < routingConfig.length; k++)
+      					}// end if(sourceQ[j].name == wfDoc.queueName)
+      				}// end for (var j = 0; j < sourceQ.length; j++)
+      			}// end for (var i = 0; i < thisConfig.length; i++)
+      		}// end for (var campusConfig in CFG.FA_mixedDocPropExtractor)
+		}// end else
+	}// end first else
 	if(!desQ || desQ == null)
 	{
 		var otherQ = "Other (" + campus + " Review for Completeness)";
@@ -413,7 +425,12 @@ function routeToReview(wfDoc, docObj, campus, errQ)
 	else
 	{
 		debug.log("DEBUG","Routing [%s] to [%s]\n", docObj, desQ);
-		RouteItem(wfDoc, desQ, "Found " + desQ + " for " + procCode);
+		debug.log("DEBUG","msg = [%s]\n", msg);
+		if(msg == null)
+		{
+			msg = "Found " + desQ + " for " + procCode;
+		}
+		RouteItem(wfDoc, desQ, msg);
 	}
 
 }// end routeToReview

@@ -33,12 +33,12 @@
 
 // ********************* Initialize global variables ********************
 var debug;
-var DELIVERY_DIR = "\\\\boisnas215c1.umasscs.net\\di_interfaces\\import_agent\\DI_"+ENV_U3+"_SA_AD_INBOUND\\";
+var DELIVERY_DIR = "Y:\\import_agent\\DI_"+ENV_U3+"_SA_AD_INBOUND\\";
 var FLAG_FILE_DIR = "Z:\\script\\lock\\SA\\";
 var FILE_DIR_LOCK = "Z:\\script\\lock\\SA\\SA_LoadMonitor_lock.txt";
 var DRAWER_NAME;
 var reportTypes = ["WADOC", "zadr0257-1", "zadr0257-2", "zadr011", "zadr012", "zadr0244", "zadr257a-1", "zadr257a-2"];
-var EMAIL_DISTRIBUTION = "gjenczyk@umassp.edu";
+var EMAIL_DISTRIBUTION = "UITS.DI.CORE@umassp.edu, pmoore@umassp.edu, kbissonette@umassp.edu, ttran@umassp.edu";
 
 /**
 * Main body of script.
@@ -122,7 +122,6 @@ function main ()
               Clib.fopen(FILE_DIR_LOCK,"a");
               debug.log("INFO","Established new lock for [%s]\n", dbDate);
               var dbsaver = Clib.fopen(FILE_DIR_LOCK,"w");
-              debug.log("DEBUG","DBSAVER: [%s] & DBDATE: [%s]\n",dbsaver, dbDate);
               Clib.fputs(dbDate,dbsaver);
               Clib.fclose(dbsaver);
             } 
@@ -319,7 +318,7 @@ function loadStatusCheck(report,checkDate,stage) {
             "AND INUSER.IN_INSTANCE.DELETION_STATUS <> 1 " +
             "AND INUSER.IN_DOC.FOLDER like '" + report + "%' " +
             OTHER_ANDS + 
-            "AND INUSER.IN_VERSION.CREATION_TIME > TO_DATE('"+checkDate+" 06:00:00AM','MMDDYYYY HH:MI:SSAM')";
+            "AND INUSER.IN_VERSION.CREATION_TIME > TO_DATE('"+checkDate+" 03:00:00PM','MMDDYYYY HH:MI:SSAM')";
   var returnVal; 
   var cur = getHostDBLookupInfo_cur(sql,returnVal);
             

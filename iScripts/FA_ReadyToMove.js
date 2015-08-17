@@ -56,9 +56,28 @@ var TEST = "321YZ78_07B9M06W0000017";
       debug = new iScriptDebug("FA_ReadyToMove", LOG_TO_FILE, DEBUG_LEVEL);
       debug.log("WARNING", "FA_ReadyToMove script started.\n");
 
-      RTM_processByTrigger(TEST);
-      //RTM_processByTask()
+      var externalMsgObj;
+      var params = getInputParams();
+      
+      if(null != params[0]) 
+      {
+          debug.log("INFO","Working with folder: [%s]\n",params[0]);
+          RTM_processByTrigger(params[0]);
+      }
+      else if((externalMsgObj = getInputPairs()) != undefined) 
+      {
 
+        setSuccess(false);
+        var oneOff = source["FolderId"];
+        if(RTM_processByTrigger(oneOff))
+        {
+          setSuccess(true);
+        }
+      }
+      else
+      {
+         RTM_processByTask()
+      }
     }
         
     catch(e)
@@ -159,7 +178,7 @@ function RTM_processByTrigger(fldrID)
   catch(miss)
   {
     //handle any errors and send out an alert email
-    debug.log("ERROR","Failed to set flag on [%s] - [%s]\n",fldr, miss);
+    debug.log("WARNING","Did not move folder: [%s] - [%s]\n",fldr, miss);
     failureEmail();
     successStatus = false;
   }
@@ -281,9 +300,9 @@ function checkRouteReady(folder)
   var campusCode = folder.type.slice(-3);
   var process = "";
 
-  var prc_sql = "SELECT ISCRIPTUSER.PROCESS_DETAILS.PROCESS " +
-  " FROM ISCRIPTUSER.PROCESS_DETAILS " +
-  "WHERE ISCRIPTUSER.PROCESS_DETAILS.FOLDERTYPE = '" + folder.type.substring(0,folder.type.length-4) + "';";
+  var prc_sql = "SELECT ISCRIPTUSER.PROCESS_DETAILS_X.PROC_CODE " +
+  " FROM ISCRIPTUSER.PROCESS_DETAILS_X " +
+  "WHERE ISCRIPTUSER.PROCESS_DETAILS_X.FOLDERTYPE = '" + folder.type.substring(0,folder.type.length-4) + "';";
   var returnVal;
   var cur = getHostDBLookupInfo_cur(prc_sql,returnVal);
   if(!cur || cur == null)
@@ -307,11 +326,13 @@ function checkRouteReady(folder)
   "ON INUSER.IN_INSTANCE.INSTANCE_ID = INUSER.IN_DOC.INSTANCE_ID " +
   "INNER JOIN INUSER.IN_DOC_TYPE " +
   "ON INUSER.IN_DOC.DOC_TYPE_ID = INUSER.IN_DOC_TYPE.DOC_TYPE_ID " +
-  "INNER JOIN ISCRIPTUSER.DI_DOCT_PROCESS " +
-  "ON INUSER.IN_DOC_TYPE.DOC_TYPE_NAME = ISCRIPTUSER.DI_DOCT_PROCESS.DOCTYPE_CODE " +
+  "INNER JOIN ISCRIPTUSER.DOC_TYPE_X " +
+  "ON INUSER.IN_DOC_TYPE.DOC_TYPE_NAME = ISCRIPTUSER.DOC_TYPE_X.DOC_TYPE_NAME " +
+  "INNER JOIN ISCRIPTUSER.DI_DOCT_PROCESS_X " +
+  "ON ISCRIPTUSER.DOC_TYPE_X.DOC_TYPE_CODE = ISCRIPTUSER.DI_DOCT_PROCESS_X.DOC_TYPE_CODE " +
   "WHERE INUSER.IN_WF_QUEUE.QUEUE_NAME LIKE '%" + campusCode + " Review for Completeness)' " +
   "AND INUSER.IN_DOC.FOLDER = '" + studentID + "' " +
-  "AND PROCESS_CODE = '" + process + "';";
+  "AND PROC_CODE = '" + process + "';";
 
   returnVal = ""; 
   cur = getHostDBLookupInfo_cur(rr_sql,returnVal);

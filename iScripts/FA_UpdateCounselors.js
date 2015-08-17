@@ -55,7 +55,7 @@ var debug = "";
 
 
 
-  	    var wfItem = new INWfItem("321YZ78_07B9LS6W000001T");//currentWfItem.id);//
+  	    var wfItem = new INWfItem(currentWfItem.id);//"321YZ78_07B9LS6W000001T");//
 		if(!wfItem.id || !wfItem.getInfo())
 		{
 			debug.log("CRITICAL", "Couldn't get info for wfItem: %s\n", getErrMsg());
