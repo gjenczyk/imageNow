@@ -1332,6 +1332,12 @@ Function ConvertWithApplication(configSection, method, path, file, outputFolder)
 			ElseIf codeCatch=1 Then
 			convertResult=false
 			gLastErrorMsg = "PDF to tif conversion timed out"
+			ElseIf codeCatch=2 Then
+			convertResult=false
+			gLastErrorMsg = "Page size out of printing range"
+			ElseIf codeCatch=3 Then
+			convertResult=false
+			gLastErrorMsg = "Some pages could not be converted"
 			Else
 			convertResult=false
 			gLastErrorMsg = "PDF to tif conversion was not successful Reason: " & codeCatch & "."
@@ -1368,6 +1374,15 @@ Function ConvertWithApplication(configSection, method, path, file, outputFolder)
 			ElseIf successCase=4 Then
 			convertResult=false
 			gLastErrorMsg = "Office has determined there may be a probelm with this file and it should be opened with caution."
+			ElseIf successCase=5 Then
+			convertResult=false
+			gLastErrorMsg = "This file contains a macro that cannot be used in an automated process. Open with caution."
+			ElseIf successCase=6 Then
+			convertResult=false
+			gLastErrorMsg = "The file format does not match the file extension. You should not attempt to open the file."
+			ElseIf successCase=7 Then
+			convertResult=false
+			gLastErrorMsg = "This file has a one or more issues that prevent automated processing."
 			Else
 			convertResult=false
 			gLastErrorMsg = "Doc conversion failed for an unspecified reason"

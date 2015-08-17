@@ -39,7 +39,18 @@ function convert ([string]$docPath, [string]$workDir, [string]$workDoc){
         $id = (gwmi -query "select * from win32_process where name='WINWORD.EXE'" | %{if($_.GetOwner().User -eq "$uName"){echo $_.ProcessId}})
 
         $passObj.PrintOut()
-        $passObj.ActiveDocument.Close([ref]0)
+        try
+        {
+            $passObj.ActiveDocument.Close([ref]0)
+        }
+        catch 
+        {
+           [System.Runtime.InteropServices.ExternalException]
+                
+           Stop-Process $id
+           remove-item $workDoc
+           [Environment]::Exit(7)
+        }
         $passObj.quit()
         $error[0] | Out-File D:\INMAC\${inmacVersion}_powerprint.log -Append
         remove-item $workDoc
@@ -65,10 +76,20 @@ function convert ([string]$docPath, [string]$workDir, [string]$workDoc){
             $passObj.quit()
             remove-item $workDoc
             [Environment]::Exit(4)  
-        } else {
+        } elseif  (($error[0] -like '*Exception from HRESULT: 0x800A175D*') -eq $true)
+        {
             $passObj.quit()
             remove-item $workDoc
             [Environment]::Exit(5)  
+        } elseif  (($error[0] -like '*the file format does not match the file extension*') -eq $true)
+        {
+            $passObj.quit()
+            remove-item $workDoc
+            [Environment]::Exit(6)  
+        } else {
+            $passObj.quit()
+            remove-item $workDoc
+            [Environment]::Exit(8)  
         } #Add more errors here as you think of them. 
 
     }
